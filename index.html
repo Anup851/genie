@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chatbot</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@48,400,1,0"
+    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+
+  </head>
+  <body>
+
+    <div class="welcome">
+      <h1 class="welcomes">
+        <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>
+      </h1>
+      <p>Click here to start a conversation</p>
+      <button class="start-chat-btn">Chat with Genie</button><br>
+      <p1> </p1>
+    </div>
+
+    <!-- Sidebar for chat history -->
+    <div class="history-sidebar">
+      <h3>Search History</h3>
+      <button class="delete-all-btn">
+        <span class="material-icons">delete_forever</span>
+        Delete All
+      </button>
+      
+      <ul class="history-list">
+        <!-- This will dynamically show search history items -->
+      </ul>
+    </div>
+
+    <div class="container">
+      <button class="chatbot-toggler"></button>
+      <div class="chatbot">
+        <header>
+          <h2>Genie</h2>
+          <button id="mode-toggle" title="Toggle Mode">
+      <span class="material-symbols-outlined">dark_mode</span>
+    </button>
+          <span class="close-btn material-symbols-outlined">close</span>
+        </header>
+        <ul class="chatbox">
+          <li class="chat incoming">
+            <div class="chat-container"></div>
+            <span class="material-symbols-outlined"></span>
+            <p>Hello i am Genie &#128079; <br />How can I assist you today?</p>
+          </li>
+        </ul>
+
+       <div class="chat-input">
+  <!-- Chat Input -->
+  <textarea placeholder="Send a Message" spellcheck="false" required></textarea>
+
+  <!-- Microphone Button -->
+  <button id="mic-btn" class="material-symbols-outlined" title="Speak" type="button">mic</button>
+
+  <!-- Image Upload Icon -->
+  <label for="image-upload" class="material-icons upload-icon" title="Upload Image">image</label>
+  <input type="file" id="image-upload" accept="image/*" style="display: none;" />
+
+  <!-- Send Button -->
+  <button id="send-btn" class="material-symbols-outlined" type="button">send</button>
+</div>
+      </div>
+    </div>
+  </body>
+</html>
