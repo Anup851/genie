@@ -240,7 +240,7 @@ const generateResponse = async (incomingChatli, userMessage) => {
       method: "POST",
      headers: {
   "Content-Type": "application/json",
-  Authorization: `Bearer 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`
+  Authorization: `Bearer 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`
 },
 
       body: JSON.stringify({
