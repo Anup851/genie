@@ -238,12 +238,14 @@ const generateResponse = async (incomingChatli, userMessage) => {
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer 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`
-      },
+     headers: {
+  "Content-Type": "application/json",
+  Authorization: `Bearer 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`
+},
+
       body: JSON.stringify({
         model: "openai/gpt-3.5-turbo",
+
         messages: conversationMemory.map((m) => ({
           role: m.role,
           content: m.text
