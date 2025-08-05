@@ -232,44 +232,40 @@ const generateResponse = async (incomingChatli, userMessage) => {
     return;
   }
 
-  // Default AI response
-  conversationMemory.push({ role: "user", text: userMessage });
+ // Default AI response
+conversationMemory.push({ role: "user", text: userMessage });
 
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-     headers: {
-  "Content-Type": "application/json",
-  Authorization: `Bearer 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`
-},
+try {
+  const response = await fetch("http://localhost:3000/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      messages: conversationMemory.map((m) => ({
+        role: m.role,
+        content: m.text
+      }))
+    })
+  });
 
-      body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
+  if (!response.ok) throw new Error(await response.text());
 
-        messages: conversationMemory.map((m) => ({
-          role: m.role,
-          content: m.text
-        }))
-      })
-    });
+  const data = await response.json();
+  const responseText = data.choices[0]?.message?.content || "Sorry, I didn't understand that.";
+  const finalText = responseText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+  messageElement.innerHTML = finalText;
 
-    if (!response.ok) throw new Error(await response.text());
+  const plainText = finalText.replace(/<[^>]*>/g, "");
+  saveSearchHistory(userMessage);
+  conversationMemory.push({ role: "assistant", text: plainText });
 
-    const data = await response.json();
-    const responseText = data.choices[0]?.message?.content || "Sorry, I didn't understand that.";
-    const finalText = responseText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
-    messageElement.innerHTML = finalText;
-
-    const plainText = finalText.replace(/<[^>]*>/g, "");
-    saveSearchHistory(userMessage);
-    conversationMemory.push({ role: "assistant", text: plainText });
-
-  } catch (error) {
-    console.error("OpenRouter API error:", error);
-    messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
-  } finally {
-    chatbox.scrollTo(0, chatbox.scrollHeight);
-  }
+} catch (error) {
+  console.error("Backend error:", error);
+  messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
+} finally {
+  chatbox.scrollTo(0, chatbox.scrollHeight);
+}
 };
 
 // Event listeners
@@ -366,4 +362,58 @@ micBtn.addEventListener("click", () => {
       console.error("Error starting speech recognition:", error);
     }
   }
+});
+
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const sidebarToggle = document.getElementById("sidebar-toggle");
+  const closeSidebar = document.getElementById("close-sidebar"); // NEW
+  const historySidebar = document.querySelector(".history-sidebar");
+  const container = document.querySelector(".container");
+  const welcome = document.querySelector(".welcome");
+  const startChatBtn = document.querySelector(".start-chat-btn");
+
+  // Initial view
+  if (welcome && container) {
+    welcome.style.display = "block";
+    container.style.display = "none";
+  }
+
+  if (startChatBtn) {
+    startChatBtn.addEventListener("click", () => {
+      if (welcome && container) {
+        welcome.style.display = "none";
+        container.style.display = "block";
+      }
+    });
+  }
+
+  if (sidebarToggle && historySidebar && container) {
+    sidebarToggle.addEventListener("click", () => {
+      historySidebar.classList.toggle("active");
+
+      if (historySidebar.classList.contains("active")) {
+        container.style.display = "none";
+      } else {
+        container.style.display = "block";
+      }
+    });
+  }
+
+  // ✅ NEW: Close sidebar button click
+  if (closeSidebar && historySidebar && container) {
+    closeSidebar.addEventListener("click", () => {
+      historySidebar.classList.remove("active");
+      container.style.display = "block";
+    });
+  }
+
+  // Handle resize
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 480 && historySidebar && container) {
+      historySidebar.classList.remove("active");
+      container.style.display = "block";
+    }
+  });
 });
