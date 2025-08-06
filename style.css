@@ -231,7 +231,7 @@ body.show-chatbot .chatbot {
   color: white;
   font-size: 1rem;
   resize: none;
-  font-family: cursive;
+
   
 }
 
@@ -757,4 +757,5 @@ body.light-mode #sidebar-toggle {
   height: 0%;
   background-color: #2e2d2d;
 }
+
 
