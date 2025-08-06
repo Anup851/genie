@@ -171,7 +171,6 @@ body.show-chatbot .chatbot {
   border-radius: 20px;
   max-width: 80%;
   font-size: 1rem;
-  font-family: cursive;
   border: 1px solid #494949;
 }
 
@@ -182,7 +181,6 @@ body.show-chatbot .chatbot {
   border-radius: 10px;
   max-width: 80%;
   font-size: 1rem;
-  font-family: cursive;
 }
 
 .chatbox .incoming .bot-message-container p {
@@ -453,7 +451,11 @@ body.light-mode .container {
 body.light-mode .chatbot {
   background-color: #ffffff;
   box-shadow: 0 0 128px 0 rgba(0, 0, 0, 0.1), 0 32px 64px -48px rgba(0, 0, 0, 0.1);
+  width: 100%;
+    border-radius: none;
+    box-shadow: none;
 }
+
 
 body.light-mode .chatbox {
   background-color: #ffffff;
@@ -493,7 +495,6 @@ body.light-mode .chatbot header .close-btn {
 
 body.light-mode .history-sidebar {
   background-color: #ffffff;
-  border-right: 1px solid #e0e0e0;
 }
 
 body.light-mode .history-sidebar h3 {
