@@ -161,7 +161,6 @@ body.show-chatbot .chatbot {
 .chatbox .outgoing {
   justify-content: flex-end;
   position: relative;
-  left: -60px;
 }
 
 .chatbox .outgoing p {
@@ -185,7 +184,7 @@ body.show-chatbot .chatbot {
 
 .chatbox .incoming .bot-message-container p {
   flex: 1;
-  min-width: 86%;
+  min-width: 100%;
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -757,5 +756,4 @@ body.light-mode #sidebar-toggle {
   height: 0%;
   background-color: #2e2d2d;
 }
-
 
