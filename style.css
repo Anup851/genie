@@ -6,10 +6,17 @@
   box-sizing: border-box;
   font-family: "Poppins", sans-serif;
 }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+ 
+}
 
 .container {
   height: 100vh;
-  width: 100%;
+  width: 100vw;
   background: #353333;
   background-size: cover;
   animation: color 12s ease-in-out infinite;
@@ -114,7 +121,7 @@ body.show-chatbot .chatbot {
 }
 
 .chatbot header {
-  background: #2e2d2d;
+  background: transparent;
   color: #fff;
   padding: 15px;
   text-align: center;
@@ -249,7 +256,7 @@ body.show-chatbot .chatbot {
   left: 0;
   width: 250px;
   height: 100vh;
-  background-color: #2e2d2d;
+  background-color: #1d1d1d;
   color: #fff;
   padding: 15px;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
@@ -569,7 +576,7 @@ body.light-mode .chatbot header .close-btn {
   display: flex;
   align-items: center;
   padding: 10px;
-  background-color: #2e2d2d;
+  background-color: transparent;
   gap: 8px;
 }
 
@@ -658,6 +665,7 @@ body.light-mode .chatbot header .close-btn {
   }
 
   .history-sidebar {
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
@@ -676,11 +684,15 @@ body.light-mode .chatbot header .close-btn {
   }
 
   .container {
-    display: none;
-  }
+    width: 100%;
+    height: 100vh;
+    background: #353333;
 
-  .container.show {
-    display: block;
+  }
+  .chatbot{
+    width: 100%;
+    border-radius: none;
+    box-shadow: none;
   }
 }
 
@@ -746,3 +758,4 @@ body.light-mode #sidebar-toggle {
   height: 0%;
   background-color: #2e2d2d;
 }
+
