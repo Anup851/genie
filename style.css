@@ -221,7 +221,6 @@ body.show-chatbot .chatbot {
   align-items: center;
   gap: 10px;
   width: 100%;
-  font-family: cursive;
 }
 
 .chat-input textarea {
