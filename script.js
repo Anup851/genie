@@ -240,8 +240,7 @@ try {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      // ✅ Add Authorization header if your backend requires it
-      // "Authorization": "Bearer YOUR_API_KEY_HERE"
+      // "Authorization": "Bearer YOUR_API_KEY_HERE" // if needed
     },
     body: JSON.stringify({
       messages: conversationMemory.map((m) => ({
@@ -259,22 +258,20 @@ try {
   const data = await response.json();
   console.log("✅ API response:", data);
 
-  // ✅ Safely extract assistant response
-  const responseText = data?.choices?.[0]?.message?.content;
+  // ✅ Use `data.reply` directly
+  const responseText = data.reply;
 
   if (!responseText) {
     console.error("⚠️ Unexpected response format:", data);
-    throw new Error("Invalid response: choices[0].message.content is missing");
+    throw new Error("Invalid response: 'reply' field is missing");
   }
 
-  // ✅ Format response text for HTML
   const finalText = responseText
     .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
     .replace(/\n/g, "<br>");
 
   messageElement.innerHTML = finalText;
 
-  // ✅ Push assistant response to memory (plain text only)
   const plainText = responseText.replace(/<[^>]*>/g, "");
   saveSearchHistory(userMessage);
   conversationMemory.push({ role: "assistant", text: plainText });
@@ -283,6 +280,7 @@ try {
   console.error("❌ Backend error:", error);
   messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
 }
+
  finally {
   chatbox.scrollTo(0, chatbox.scrollHeight);
 }
