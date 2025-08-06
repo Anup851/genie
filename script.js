@@ -236,10 +236,12 @@ const generateResponse = async (incomingChatli, userMessage) => {
 conversationMemory.push({ role: "user", text: userMessage });
 
 try {
-  const response = await fetch("http://localhost:3000/chat", {
+  const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      // ✅ Add Authorization header if your backend requires it
+      // "Authorization": "Bearer YOUR_API_KEY_HERE"
     },
     body: JSON.stringify({
       messages: conversationMemory.map((m) => ({
@@ -249,25 +251,42 @@ try {
     })
   });
 
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `HTTP error: ${response.status}`);
+  }
 
   const data = await response.json();
-  const responseText = data.choices[0]?.message?.content || "Sorry, I didn't understand that.";
-  const finalText = responseText.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+  console.log("✅ API response:", data);
+
+  // ✅ Safely extract assistant response
+  const responseText = data?.choices?.[0]?.message?.content;
+
+  if (!responseText) {
+    console.error("⚠️ Unexpected response format:", data);
+    throw new Error("Invalid response: choices[0].message.content is missing");
+  }
+
+  // ✅ Format response text for HTML
+  const finalText = responseText
+    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+    .replace(/\n/g, "<br>");
+
   messageElement.innerHTML = finalText;
 
-  const plainText = finalText.replace(/<[^>]*>/g, "");
+  // ✅ Push assistant response to memory (plain text only)
+  const plainText = responseText.replace(/<[^>]*>/g, "");
   saveSearchHistory(userMessage);
   conversationMemory.push({ role: "assistant", text: plainText });
 
 } catch (error) {
-  console.error("Backend error:", error);
+  console.error("❌ Backend error:", error);
   messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
-} finally {
+}
+ finally {
   chatbox.scrollTo(0, chatbox.scrollHeight);
 }
 };
-
 // Event listeners
 sendChatBtn.addEventListener("click", handleChat);
 
@@ -417,3 +436,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+  const closeBtn = document.querySelector("#close-chatbot");
+  const container = document.querySelector(".container");
+  const welcome = document.querySelector(".welcome");
+  const startChatBtn = document.querySelector(".start-chat-btn");
+
+  // Show welcome screen initially
+  if (welcome && container) {
+    welcome.style.display = "block";
+    container.style.display = "none";
+  }
+
+  // Start chat button logic
+  if (startChatBtn && welcome && container) {
+    startChatBtn.addEventListener("click", () => {
+      welcome.style.display = "none";
+      container.style.display = "block";
+    });
+  }
+
+  // ✅ Close chatbot and go back to welcome screen
+  if (closeBtn && container && welcome) {
+    closeBtn.addEventListener("click", () => {
+      container.style.display = "none";
+      welcome.style.display = "block"; // 👈 show welcome again
+    });
+  }
+});
+
+
