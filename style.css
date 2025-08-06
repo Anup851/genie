@@ -168,6 +168,8 @@ body.show-chatbot .chatbot {
   color: white;
   padding: 10px;
   border-radius: 20px;
+  position: relative;
+  left: -17%;
   max-width: 80%;
   font-size: 1rem;
   border: 1px solid #494949;
@@ -298,7 +300,6 @@ button.chatbot-toggler {
   border-radius: 5px;
   margin-bottom: 5px;
   font-size: 0.9em;
-  font-family: cursive;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -448,7 +449,6 @@ body.light-mode .container {
 
 body.light-mode .chatbot {
   background-color: #ffffff;
-  width: 100%;
     border-radius: none;
     box-shadow: none;
 }
@@ -492,6 +492,8 @@ body.light-mode .chatbot header .close-btn {
 
 body.light-mode .history-sidebar {
   background-color: #ffffff;
+  border-right: 1px solid #e0e0e0;
+
 }
 
 body.light-mode .history-sidebar h3 {
@@ -534,6 +536,11 @@ body.light-mode .speak-btn {
 }
 body.light-mode .chatbot header .close-btn {
   color: #9154c3;
+}
+body .light-mode #slidebar-toggle
+{
+  color:white;
+
 }
 
 #mode-toggle {
@@ -688,9 +695,38 @@ body.light-mode .chatbot header .close-btn {
 
   }
   .chatbot{
+    position: fixed;
+    left: -10px;
     width: 100%;
     border-radius: none;
     box-shadow: none;
+
+  }
+  #close-chatbot
+  {
+    position: fixed;
+    left: 95%;
+  }
+  .chat-input
+  {
+    display: flex;
+  align-items: center;
+  gap:2px;
+  width: 100%;
+  position: relative;
+  left: 20px;
+  padding: 0;
+  margin: 0;
+  }
+  .chat-input textarea
+  {
+    width: 100%;
+  }
+  .chatbox .outgoing p
+  {
+    position: relative;
+    left:0;
+
   }
 }
 
