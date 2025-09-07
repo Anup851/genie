@@ -409,6 +409,16 @@ document.addEventListener("DOMContentLoaded", () => {
         welcome.style.display = "none";
         container.style.display = "block";
       }
+
+      // Mobile: ensure sidebar hidden by default
+      if (window.innerWidth <= 480) {
+        historySidebar.classList.remove("active");
+        document.body.classList.remove("show-history");
+      } else {
+        // Desktop: ensure sidebar visible
+        historySidebar.classList.add("active");
+        document.body.classList.add("show-history");
+      }
     });
   }
 
@@ -417,17 +427,34 @@ document.addEventListener("DOMContentLoaded", () => {
     closeBtn.addEventListener("click", () => {
       container.style.display = "none";
       welcome.style.display = "block";
+
+      // Reset mobile/desktop sidebar state
+      if (window.innerWidth <= 480) {
+        historySidebar.classList.remove("active");
+        document.body.classList.remove("show-history");
+      } else {
+        historySidebar.classList.add("active");
+        document.body.classList.add("show-history");
+      }
     });
   }
-});
-// Ensure sidebar always visible on desktop after resize
-window.addEventListener("resize", () => {
+
+  // Set initial sidebar state based on screen width
   if (window.innerWidth > 480) {
-    // Remove any mobile-only classes that hide sidebar
     historySidebar.classList.add("active");
     document.body.classList.add("show-history");
   } else {
-    // Back to mobile defaults
+    historySidebar.classList.remove("active");
+    document.body.classList.remove("show-history");
+  }
+});
+
+// Adjust sidebar on resize
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 480) {
+    historySidebar.classList.add("active");
+    document.body.classList.add("show-history");
+  } else {
     historySidebar.classList.remove("active");
     document.body.classList.remove("show-history");
   }
