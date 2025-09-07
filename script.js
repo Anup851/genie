@@ -7,6 +7,8 @@ const historySidebar = document.querySelector(".history-sidebar");
 const historyList = document.querySelector(".history-list");
 const deleteAllBtn = document.querySelector(".delete-all-btn");
 const welcomeText = document.querySelector(".welcome");
+const sidebarToggle = document.getElementById("sidebar-toggle");
+const closeSidebarBtn = document.getElementById("close-sidebar");
 
 // API configurations
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
@@ -65,8 +67,6 @@ function createChatLi(message, className) {
 
   return chatLi;
 }
-
-
 
 // Save search history
 const saveSearchHistory = (message) => {
@@ -149,15 +149,13 @@ async function fetchWeather(city) {
 }
 
 // Generate response
-// Generate response
 const generateResponse = async (incomingChatli, userMessage) => {
   const messageElement = incomingChatli.querySelector("p");
   messageElement.innerHTML = "Thinking<span class='dots'></span>";
 
-  // 1. Fixed variable name from 'message' to 'userMessage'
   const lowerMessage = userMessage.toLowerCase();
 
-  // 2. Improved timezone detection with regex boundaries
+  // Timezone detection
   for (const location in timeZones) {
     const locationPattern = new RegExp(`\\b${location}\\b`, 'i');
     if (
@@ -169,7 +167,6 @@ const generateResponse = async (incomingChatli, userMessage) => {
       const reply = `The current time in ${capitalizedLocation} is ${timeString}.`;
       messageElement.innerHTML = `🕒 ${reply}`;
       
-      // Add to conversation memory
       conversationMemory.push({ role: "user", text: userMessage });
       conversationMemory.push({ role: "assistant", text: reply });
       
@@ -178,13 +175,12 @@ const generateResponse = async (incomingChatli, userMessage) => {
     }
   }
 
-  // 3. Fixed local time detection
+  // Local time detection
   if (/\b(what(?:'s| is)? the time|current time|time now)\b/i.test(lowerMessage)) {
     const localTime = new Date().toLocaleTimeString();
     const reply = `The current local time is ${localTime}.`;
     messageElement.innerHTML = `🕒 ${reply}`;
     
-    // Add to conversation memory
     conversationMemory.push({ role: "user", text: userMessage });
     conversationMemory.push({ role: "assistant", text: reply });
     
@@ -192,7 +188,7 @@ const generateResponse = async (incomingChatli, userMessage) => {
     return;
   }
 
-  // 4. Improved weather detection with regex
+  // Weather detection
   if (lowerMessage.includes("weather")) {
     const weatherRegex = /weather\s+(?:in|at|for)\s+(.+)/i;
     const match = userMessage.match(weatherRegex);
@@ -217,7 +213,6 @@ const generateResponse = async (incomingChatli, userMessage) => {
     const weatherReply = `🌤️ <b>Weather in ${cityName}, ${country}</b>:<br>Temperature: ${temp}°C (feels like ${feels_like}°C)<br>Condition: ${description}<br>Humidity: ${humidity}%<br>Wind Speed: ${windSpeed} m/s`;
     messageElement.innerHTML = weatherReply;
     
-    // Add to conversation memory
     conversationMemory.push({ role: "user", text: userMessage });
     conversationMemory.push({ role: "assistant", text: weatherReply.replace(/<[^>]*>/g, "") });
     
@@ -225,66 +220,60 @@ const generateResponse = async (incomingChatli, userMessage) => {
     return;
   }
 
-  // 5. Clear memory command
+  // Clear memory command
   if (lowerMessage.includes("clear memory")) {
     conversationMemory = [];
     messageElement.innerHTML = "🧠 Memory cleared.";
     return;
   }
 
- // Default AI response
-conversationMemory.push({ role: "user", text: userMessage });
+  // Default AI response
+  conversationMemory.push({ role: "user", text: userMessage });
 
-try {
-  const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      // "Authorization": "Bearer YOUR_API_KEY_HERE" // if needed
-    },
-    body: JSON.stringify({
-      messages: conversationMemory.map((m) => ({
-        role: m.role,
-        content: m.text
-      }))
-    })
-  });
+  try {
+    const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: conversationMemory.map((m) => ({
+          role: m.role,
+          content: m.text
+        }))
+      })
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `HTTP error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const responseText = data.reply;
+
+    if (!responseText) {
+      throw new Error("Invalid response: 'reply' field is missing");
+    }
+
+    const finalText = responseText
+      .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+      .replace(/\n/g, "<br>");
+
+    messageElement.innerHTML = finalText;
+
+    const plainText = responseText.replace(/<[^>]*>/g, "");
+    saveSearchHistory(userMessage);
+    conversationMemory.push({ role: "assistant", text: plainText });
+
+  } catch (error) {
+    console.error("❌ Backend error:", error);
+    messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
+  } finally {
+    chatbox.scrollTo(0, chatbox.scrollHeight);
   }
-
-  const data = await response.json();
-  console.log("✅ API response:", data);
-
-  // ✅ Use `data.reply` directly
-  const responseText = data.reply;
-
-  if (!responseText) {
-    console.error("⚠️ Unexpected response format:", data);
-    throw new Error("Invalid response: 'reply' field is missing");
-  }
-
-  const finalText = responseText
-    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-    .replace(/\n/g, "<br>");
-
-  messageElement.innerHTML = finalText;
-
-  const plainText = responseText.replace(/<[^>]*>/g, "");
-  saveSearchHistory(userMessage);
-  conversationMemory.push({ role: "assistant", text: plainText });
-
-} catch (error) {
-  console.error("❌ Backend error:", error);
-  messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
-}
-
- finally {
-  chatbox.scrollTo(0, chatbox.scrollHeight);
-}
 };
+
 // Event listeners
 sendChatBtn.addEventListener("click", handleChat);
 
@@ -336,7 +325,6 @@ window.addEventListener("DOMContentLoaded", () => {
 const micBtn = document.getElementById("mic-btn");
 let recognition;
 
-// Check for standard and webkit implementations
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
@@ -363,12 +351,10 @@ if (SpeechRecognition) {
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     chatInput.value = transcript;
-    // Auto-send after voice input
     setTimeout(handleChat, 500);
   };
 } else {
   micBtn.style.display = "none";
-  console.warn("Speech recognition not supported in this browser");
 }
 
 micBtn.addEventListener("click", () => {
@@ -381,12 +367,32 @@ micBtn.addEventListener("click", () => {
   }
 });
 
+// History sidebar functionality - FIXED VERSION
+if (sidebarToggle && closeSidebarBtn) {
+  sidebarToggle.addEventListener("click", () => {
+    historySidebar.classList.toggle("active");
+    document.body.classList.toggle("show-history");
+  });
 
+  closeSidebarBtn.addEventListener("click", () => {
+    historySidebar.classList.remove("active");
+    document.body.classList.remove("show-history");
+  });
 
+  // Close sidebar when clicking outside on mobile
+  document.addEventListener("click", (event) => {
+    if (window.innerWidth <= 480 && 
+        historySidebar.classList.contains("active") && 
+        !historySidebar.contains(event.target) && 
+        event.target !== sidebarToggle) {
+      historySidebar.classList.remove("active");
+      document.body.classList.remove("show-history");
+    }
+  });
+}
+
+// Welcome screen and container management
 document.addEventListener("DOMContentLoaded", () => {
-  const sidebarToggle = document.getElementById("sidebar-toggle");
-  const closeSidebar = document.getElementById("close-sidebar"); // NEW
-  const historySidebar = document.querySelector(".history-sidebar");
   const container = document.querySelector(".container");
   const welcome = document.querySelector(".welcome");
   const startChatBtn = document.querySelector(".start-chat-btn");
@@ -406,62 +412,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (sidebarToggle && historySidebar && container) {
-    sidebarToggle.addEventListener("click", () => {
-      historySidebar.classList.toggle("active");
-
-      if (historySidebar.classList.contains("active")) {
-        container.style.display = "none";
-      } else {
-        container.style.display = "block";
-      }
-    });
-  }
-
-  // ✅ NEW: Close sidebar button click
-  if (closeSidebar && historySidebar && container) {
-    closeSidebar.addEventListener("click", () => {
-      historySidebar.classList.remove("active");
-      container.style.display = "block";
-    });
-  }
-
-  // Handle resize
-  window.addEventListener("resize", () => {
-    if (window.innerWidth > 480 && historySidebar && container) {
-      historySidebar.classList.remove("active");
-      container.style.display = "block";
-    }
-  });
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-  const closeBtn = document.querySelector("#close-chatbot");
-  const container = document.querySelector(".container");
-  const welcome = document.querySelector(".welcome");
-  const startChatBtn = document.querySelector(".start-chat-btn");
-
-  // Show welcome screen initially
-  if (welcome && container) {
-    welcome.style.display = "block";
-    container.style.display = "none";
-  }
-
-  // Start chat button logic
-  if (startChatBtn && welcome && container) {
-    startChatBtn.addEventListener("click", () => {
-      welcome.style.display = "none";
-      container.style.display = "block";
-    });
-  }
-
-  // ✅ Close chatbot and go back to welcome screen
+  // Close chatbot and return to welcome screen
   if (closeBtn && container && welcome) {
     closeBtn.addEventListener("click", () => {
       container.style.display = "none";
-      welcome.style.display = "block"; // 👈 show welcome again
+      welcome.style.display = "block";
     });
   }
 });
-
-
+// Ensure sidebar always visible on desktop after resize
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 480) {
+    // Remove any mobile-only classes that hide sidebar
+    historySidebar.classList.add("active");
+    document.body.classList.add("show-history");
+  } else {
+    // Back to mobile defaults
+    historySidebar.classList.remove("active");
+    document.body.classList.remove("show-history");
+  }
+});
