@@ -230,8 +230,10 @@ const generateResponse = async (incomingChatli, userMessage) => {
   // Default AI response
   conversationMemory.push({ role: "user", text: userMessage });
 
-  try {
-    const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
+try {
+  const response = await fetch(
+    "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", // ✅ Your Replit backend URL
+    {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -239,34 +241,35 @@ const generateResponse = async (incomingChatli, userMessage) => {
       body: JSON.stringify({
         messages: conversationMemory.map((m) => ({
           role: m.role,
-          content: m.text
-        }))
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || `HTTP error: ${response.status}`);
+          content: m.text,
+        })),
+      }),
     }
+  );
 
-    const data = await response.json();
-    const responseText = data.reply;
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `HTTP error: ${response.status}`);
+  }
 
-    if (!responseText) {
-      throw new Error("Invalid response: 'reply' field is missing");
-    }
+  const data = await response.json();
+  const responseText = data.reply;
 
-    const finalText = responseText
-      .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-      .replace(/\n/g, "<br>");
+  if (!responseText) {
+    throw new Error("Invalid response: 'reply' field is missing");
+  }
 
-    messageElement.innerHTML = finalText;
+  const finalText = responseText
+    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+    .replace(/\n/g, "<br>");
 
-    const plainText = responseText.replace(/<[^>]*>/g, "");
-    saveSearchHistory(userMessage);
-    conversationMemory.push({ role: "assistant", text: plainText });
+  messageElement.innerHTML = finalText;
 
-  } catch (error) {
+  const plainText = responseText.replace(/<[^>]*>/g, "");
+  saveSearchHistory(userMessage);
+  conversationMemory.push({ role: "assistant", text: plainText });
+
+} catch (error) {
     console.error("❌ Backend error:", error);
     messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
   } finally {
