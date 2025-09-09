@@ -228,36 +228,43 @@ const generateResponse = async (incomingChatli, userMessage) => {
   }
 
   // Default AI response
-  conversationMemory.push({ role: "user", text: userMessage });
-
+ conversationMemory.push({ role: "user", text: userMessage });
+ 
 try {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
   const response = await fetch(
-    "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", // ✅ Your Replit backend URL
+    "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat",
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        messages: conversationMemory.map((m) => ({
+        messages: conversationMemory.map(m => ({
           role: m.role,
           content: m.text,
         })),
       }),
+      signal: controller.signal,
     }
   );
+
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || `HTTP error: ${response.status}`);
   }
 
-  const data = await response.json();
-  const responseText = data.reply;
-
-  if (!responseText) {
-    throw new Error("Invalid response: 'reply' field is missing");
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Invalid JSON returned by backend");
   }
+
+  const responseText = data.reply;
+  if (!responseText) throw new Error("Invalid response: 'reply' field is missing");
 
   const finalText = responseText
     .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
@@ -270,11 +277,11 @@ try {
   conversationMemory.push({ role: "assistant", text: plainText });
 
 } catch (error) {
-    console.error("❌ Backend error:", error);
-    messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
-  } finally {
-    chatbox.scrollTo(0, chatbox.scrollHeight);
-  }
+  console.error("❌ Backend error:", error);
+  messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
+} finally {
+  chatbox.scrollTo(0, chatbox.scrollHeight);
+}
 };
 
 // Event listeners
@@ -394,18 +401,23 @@ if (sidebarToggle && closeSidebarBtn) {
   });
 }
 
-// Welcome screen and container management
+// Welcome screen and container + sidebar management
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".container");
   const welcome = document.querySelector(".welcome");
   const startChatBtn = document.querySelector(".start-chat-btn");
 
-  // Initial view
+  // Initial view: show welcome, hide chat container
   if (welcome && container) {
     welcome.style.display = "block";
     container.style.display = "none";
   }
 
+  // Hide sidebar on welcome screen initially
+  historySidebar.classList.remove("active");
+  document.body.classList.remove("show-history");
+
+  // Start Chat button
   if (startChatBtn) {
     startChatBtn.addEventListener("click", () => {
       if (welcome && container) {
@@ -413,52 +425,42 @@ document.addEventListener("DOMContentLoaded", () => {
         container.style.display = "block";
       }
 
-      // Mobile: ensure sidebar hidden by default
-      if (window.innerWidth <= 480) {
-        historySidebar.classList.remove("active");
-        document.body.classList.remove("show-history");
-      } else {
-        // Desktop: ensure sidebar visible
-        historySidebar.classList.add("active");
-        document.body.classList.add("show-history");
-      }
+      // Show sidebar when chat opens
+      historySidebar.classList.add("active");
+      document.body.classList.add("show-history");
     });
   }
 
-  // Close chatbot and return to welcome screen
+  // Close Chat button
   if (closeBtn && container && welcome) {
     closeBtn.addEventListener("click", () => {
       container.style.display = "none";
       welcome.style.display = "block";
 
-      // Reset mobile/desktop sidebar state
-      if (window.innerWidth <= 480) {
-        historySidebar.classList.remove("active");
-        document.body.classList.remove("show-history");
-      } else {
-        historySidebar.classList.add("active");
-        document.body.classList.add("show-history");
-      }
+      // Hide sidebar when returning to welcome
+      historySidebar.classList.remove("active");
+      document.body.classList.remove("show-history");
     });
   }
-
-  // Set initial sidebar state based on screen width
-  if (window.innerWidth > 480) {
-    historySidebar.classList.add("active");
-    document.body.classList.add("show-history");
-  } else {
-    historySidebar.classList.remove("active");
-    document.body.classList.remove("show-history");
-  }
 });
 
-// Adjust sidebar on resize
+// Adjust sidebar on window resize (mobile vs desktop)
 window.addEventListener("resize", () => {
-  if (window.innerWidth > 480) {
-    historySidebar.classList.add("active");
-    document.body.classList.add("show-history");
-  } else {
+  if (window.innerWidth <= 480) {
+    // Hide sidebar on mobile by default
     historySidebar.classList.remove("active");
     document.body.classList.remove("show-history");
+  } else {
+    // Show sidebar on desktop only if chat container is visible
+    const container = document.querySelector(".container");
+    if (container && container.style.display === "block") {
+      historySidebar.classList.add("active");
+      document.body.classList.add("show-history");
+    } else {
+      historySidebar.classList.remove("active");
+      document.body.classList.remove("show-history");
+    }
   }
 });
+
+
