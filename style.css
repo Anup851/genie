@@ -169,7 +169,6 @@ html, body {
   bottom: 0;
   width: calc(100% - 250px);
   background: var(--secondary-bg);
-  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
@@ -509,40 +508,63 @@ body.show-history .chatbot {
     border-radius: 0;
     max-width: 100% !important;
   }
-  
+
   body.show-history .chatbot {
     width: 100% !important;
     transform: none;
   }
-  
+
   .container {
     overflow: hidden;
     width: 100%;
   }
-  
+
+  /* Outgoing (user) messages to the right */
   .chatbox .outgoing p {
-    left: 0;
-    margin-right: 10px;
+    position: relative;
+    left: auto;                 /* reset any desktop offset */
+    margin-left: auto;          /* push to right edge */
+    margin-right: 8px;          /* small right gap */
     max-width: 85%;
   }
-  
+
+  /* Incoming (bot) messages to the left */
+  .chatbox .incoming,
+  .chat-incoming {
+    display: flex;
+    justify-content: flex-start;
+    margin-left: 0 !important; /* no wrapper gap */
+    padding-left: 0 !important;
+    left: -20px;
+  }
+
+  .chatbox .incoming p,
+  .chat-incoming p {
+    display: flex;
+    left: -20px;
+    margin-left: 0 !important; /* no bubble gap */
+          /* small inner padding so text isn’t glued to edge */
+    max-width: 85%;            /* control width on mobile */
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
+  }
+
   .chat-input {
     padding: 10px;
     width: 100%;
     left: 0 !important;
     gap: 8px;
   }
-  
+
   .chat-input textarea {
     width: 100%;
   }
-  
+
   #close-chatbot {
     position: absolute;
     right: 15px;
     left: auto;
   }
-  
+
   /* History sidebar for mobile */
   .history-sidebar {
     width: 85% !important;
@@ -555,28 +577,29 @@ body.show-history .chatbot {
     z-index: 1001;
     display: block !important;
   }
-  
+
   body.show-history .history-sidebar {
     transform: translateX(0);
   }
-  
+
   body.show-history .chatbot {
     transform: translateX(0);
   }
-  
+
   /* Ensure the background color is consistent */
-  .chatbot, 
-  .chatbox, 
+  .chatbot,
+  .chatbox,
   .chat-input {
     background: var(--secondary-bg);
   }
-  
+
   body.light-mode .chatbot,
   body.light-mode .chatbox,
   body.light-mode .chat-input {
     background: var(--secondary-bg);
   }
 }
+
 
 /* Remove conflicting styles */
 @media (max-width: 480px) {
@@ -683,9 +706,10 @@ body.light-mode .history-sidebar h3 {
 }
 
 body.light-mode .history-list li {
-  background: var(--gradient-primary);
-  color: var(--white);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: white;
+  color: black;
+  border: 1.7px solid rgba(0, 0, 0, 0.1);
+  font-weight: 400;
 }
 
 body.light-mode .history-list li:hover {
