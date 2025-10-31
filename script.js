@@ -10,6 +10,17 @@ const welcomeText = document.querySelector(".welcome");
 const sidebarToggle = document.getElementById("sidebar-toggle");
 const closeSidebarBtn = document.getElementById("close-sidebar");
 
+
+// 🔹 Ensure unique ID is generated and stored
+let userId = localStorage.getItem("userId");
+if (!userId) {
+  userId = "user_" + Math.random().toString(36).substring(2, 10);
+  localStorage.setItem("userId", userId);
+}
+console.log("🆔 Your Genie userId:", userId);
+
+
+
 // API configurations
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
@@ -150,7 +161,6 @@ const generateResponse = async (incomingChatli, userMessage) => {
       .replace(/\b(weather|temperature|in|at|for|what|is|the|current)\b/gi, "")
       .trim();
 
-    // Fallback: last word
     if (!city) {
       const words = userMessage.split(" ");
       city = words[words.length - 1];
@@ -185,63 +195,56 @@ const generateResponse = async (incomingChatli, userMessage) => {
     return;
   }
 
-  // Clear memory command
+  // ---------- CLEAR MEMORY ----------
   if (lowerMessage.includes("clear memory")) {
     conversationMemory = [];
     messageElement.innerHTML = "🧠 Memory cleared.";
     return;
   }
 
-  // Push user message first
+  // ---------- MEMORY UPDATE ----------
   conversationMemory.push({ role: "user", text: userMessage });
 
-try {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-  // Call your Replit backend instead of OpenAI directly
-  const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-  messages: conversationMemory.map(m => ({
-    role: m.role,
-    content: m.text // ✅ use 'content' not 'text'
-  }))
-}),
+    // ✅ Updated backend call
+    // In your generateResponse function, change this:
+const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    userId: userId,
+    message: userMessage.trim()  // ✅ CORRECT - property name is "message"
+  }),
+  signal: controller.signal
+});
 
-    signal: controller.signal
-  });
 
-  clearTimeout(timeout);
+    clearTimeout(timeout);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `HTTP error: ${response.status}`);
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error: ${response.status}`);
+    }
 
-  const data = await response.json();
-  const responseText = data.reply; // your backend returns { reply: "..." }
+    const data = await response.json();
+    const responseText = data.reply || "⚠️ No response from AI backend.";
 
-  if (!responseText) {
-    throw new Error("Invalid response: 'reply' field is missing");
-  }
+    // Format Markdown to HTML
+    const finalText = responseText
+      .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+      .replace(/\n/g, "<br>");
 
-  // Format text for HTML
-  const finalText = responseText
-    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-    .replace(/\n/g, "<br>");
+    messageElement.innerHTML = finalText;
 
-  messageElement.innerHTML = finalText;
+    // Save clean text to memory
+    const plainText = responseText.replace(/<[^>]*>/g, "");
+    conversationMemory.push({ role: "assistant", text: plainText });
+    saveSearchHistory(userMessage);
 
-  // Save plain text to memory
-  const plainText = responseText.replace(/<[^>]*>/g, "");
-  saveSearchHistory(userMessage);
-  conversationMemory.push({ role: "assistant", text: plainText });
-
-} catch (error) {
+  } catch (error) {
     console.error("❌ Backend error:", error);
     messageElement.innerHTML = "❌ Failed to get response. Please try again later.";
   } finally {
@@ -425,3 +428,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+
+
