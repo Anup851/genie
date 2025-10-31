@@ -11,14 +11,25 @@ const sidebarToggle = document.getElementById("sidebar-toggle");
 const closeSidebarBtn = document.getElementById("close-sidebar");
 
 
-// 🔹 Ensure unique ID is generated and stored
-let userId = localStorage.getItem("userId");
-if (!userId) {
-  userId = "user_" + Math.random().toString(36).substring(2, 10);
-  localStorage.setItem("userId", userId);
+// User management with persistence
+function getUserId() {
+  let userId = localStorage.getItem('genie_userId');
+  if (!userId) {
+    // Create a unique user ID and save it
+    userId = 'user_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('genie_userId', userId);
+    console.log('🆕 Created new user ID:', userId);
+  } else {
+    console.log('🔍 Found existing user ID:', userId);
+  }
+  return userId;
 }
-console.log("🆔 Your Genie userId:", userId);
 
+// Initialize user ID when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  const userId = getUserId();
+  console.log('👤 Current user:', userId);
+});
 
 
 // API configurations
@@ -209,27 +220,33 @@ const generateResponse = async (incomingChatli, userMessage) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
-    // ✅ Updated backend call
-    // In your generateResponse function, change this:
-const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    userId: userId,
-    message: userMessage.trim()  // ✅ CORRECT - property name is "message"
-  }),
-  signal: controller.signal
-});
-
+    // ✅ FIXED: Get persistent user ID and make correct API call
+    const userId = getUserId(); // Make sure this function exists
+    
+    const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/chat", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        userId: userId, // Use persistent user ID
+        message: userMessage.trim()  // ✅ CORRECT - property name is "message"
+      }),
+      signal: controller.signal
+    });
 
     clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(errorText || `HTTP error: ${response.status}`);
+      console.error("❌ Server error:", response.status, errorText);
+      throw new Error(`Server error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log("✅ Backend response:", data);
+    
     const responseText = data.reply || "⚠️ No response from AI backend.";
 
     // Format Markdown to HTML
@@ -431,3 +448,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+// Test backend connection
+async function testBackendConnection() {
+  try {
+    const response = await fetch("https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev/");
+    if (response.ok) {
+      const data = await response.json();
+      console.log("✅ Backend is reachable:", data);
+      return true;
+    } else {
+      console.error("❌ Backend responded with error:", response.status);
+      return false;
+    }
+  } catch (error) {
+    console.error("❌ Cannot reach backend:", error);
+    return false;
+  }
+}
+
+// Test connection on page load
+document.addEventListener('DOMContentLoaded', function() {
+  testBackendConnection();
+});
