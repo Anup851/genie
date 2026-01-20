@@ -109,7 +109,7 @@ const updateHistorySidebar = () => {
   if (searchHistory.length === 0) {
     historyList.innerHTML = "<li>No history available</li>";
   } else {
-    searchHistory.forEach((query, index) => {
+      searchHistory.forEach((query, index) => {
       const listItem = document.createElement("li");
       listItem.textContent = query;
       const deleteIcon = document.createElement("span");
@@ -203,13 +203,14 @@ messageElement.innerHTML = "Thinking<span class='dots'></span>";
     const windSpeed = weatherData.wind.speed;
     const { name: cityName, sys: { country } } = weatherData;
 
-    const weatherReply = `🌤️ <b>Weather in ${cityName}, ${country}</b>:<br>
-      Temperature: ${temp}°C (feels like ${feels_like}°C)<br>
-      Condition: ${description}<br>
-      Humidity: ${humidity}%<br>
-      Wind Speed: ${windSpeed} m/s`;
-
+    const weatherReply = `🌤️ Weather in ${cityName}, ${country}:<br>
+    Temperature: ${temp}°C 
+    (feels like ${feels_like}°C)<br>
+    Condition: ${description}<br>
+    Humidity: ${humidity}%<br>
+    Wind Speed: ${windSpeed} m/s`;
     messageElement.innerHTML = weatherReply;
+
     conversationMemory.push({ role: "user", text: userMessage });
     conversationMemory.push({ role: "assistant", text: weatherReply.replace(/<[^>]*>/g, "") });
     saveSearchHistory(userMessage);
@@ -264,7 +265,8 @@ messageElement.innerHTML = "Thinking<span class='dots'></span>";
       .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
       .replace(/\n/g, "<br>");
 
-    messageElement.innerHTML = finalText;
+    messageElement.innerHTML = `<div class="bot-message-content">${finalText}</div>`;
+
 
     // Save clean text to memory
     const plainText = responseText.replace(/<[^>]*>/g, "");
@@ -555,3 +557,8 @@ document.addEventListener("click", (e) => {
 
   window.speechSynthesis.speak(utterance);
 });
+
+
+
+
+
