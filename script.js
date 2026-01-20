@@ -68,15 +68,24 @@ function createChatLi(message, className) {
     const container = document.createElement("div");
     container.className = "bot-message-container";
 
-    container.innerHTML = `<p>${message}</p>`;
+    const p = document.createElement("p");
+    p.innerHTML = message;
+    container.appendChild(p);
 
     const speakBtn = document.createElement("button");
     speakBtn.className = "speak-btn material-symbols-outlined";
     speakBtn.textContent = "volume_up";
+
+    // 🔊 FIX: SPEAK ON CLICK
+    speakBtn.addEventListener("click", () => {
+      const text = p.innerText.trim();
+      if (text) speakText(text);
+    });
+
     container.appendChild(speakBtn);
 
     const botIcon = document.createElement("span");
-    botIcon.className = "material-symbols-outlined";
+    botIcon.className = "material-symbols-outlined robot-icon";
     botIcon.textContent = "smart_toy";
 
     chatLi.appendChild(botIcon);
@@ -85,6 +94,7 @@ function createChatLi(message, className) {
 
   return chatLi;
 }
+
 
 // Save search history
 const saveSearchHistory = (message) => {
@@ -125,7 +135,6 @@ const deleteHistoryItem = (index) => {
   updateHistorySidebar();
 };
 
-// Handle chat
 const handleChat = () => {
   const userMessage = chatInput.value.trim();
   if (!userMessage) return;
@@ -135,11 +144,11 @@ const handleChat = () => {
   chatbox.scrollTo(0, chatbox.scrollHeight);
 
   setTimeout(() => {
-    const incomingChatli = createChatLi("", "incoming");
-    chatbox.appendChild(incomingChatli);
-    generateResponse(incomingChatli, userMessage);
+    const typingLi = showTypingIndicator();
+    generateResponse(typingLi, userMessage);
   }, 600);
 };
+
 
 // Fetch real-time weather
 async function fetchWeather(city) {
@@ -161,8 +170,9 @@ function getTimeInZone(timeZone) {
 
 // Main response generator
 const generateResponse = async (incomingChatli, userMessage) => {
-  const messageElement = incomingChatli.querySelector("p");
-  messageElement.innerHTML = "Thinking<span class='dots'></span>";
+  const messageElement = convertTypingToMessage(incomingChatli);
+messageElement.innerHTML = "Thinking<span class='dots'></span>";
+
 
   const lowerMessage = userMessage.toLowerCase();
 
@@ -384,67 +394,67 @@ window.addEventListener("keydown", function(e) {
   if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) e.preventDefault();
 });
 
+// mic working
+// ================= MIC (Speech to Text) FIX =================
 document.addEventListener("DOMContentLoaded", () => {
   const micBtn = document.getElementById("mic-btn");
   const chatInput = document.querySelector(".chat-input textarea");
 
   if (!micBtn || !chatInput) return;
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
   if (!SpeechRecognition) {
-    micBtn.style.display = "none"; // hide mic if not supported
+    micBtn.style.display = "none";
     return;
   }
 
   const recognition = new SpeechRecognition();
   recognition.lang = "en-US";
   recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
 
-  let isListening = false;
+  let listening = false;
+
+  micBtn.addEventListener("click", async () => {
+    if (listening) {
+      recognition.stop();
+      return;
+    }
+
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      recognition.start();
+    } catch {
+      alert("Please allow microphone permission.");
+    }
+  });
 
   recognition.onstart = () => {
-    isListening = true;
-    micBtn.textContent = "🎙️ Listening...";
+    listening = true;
     micBtn.classList.add("listening");
+    micBtn.textContent = "mic_off";
   };
 
   recognition.onend = () => {
-    isListening = false;
-    micBtn.textContent = "mic";
+    listening = false;
     micBtn.classList.remove("listening");
-  };
-
-  recognition.onerror = (e) => {
-    console.error("Speech recognition error:", e.error);
-    isListening = false;
     micBtn.textContent = "mic";
-    micBtn.classList.remove("listening");
   };
 
-  recognition.onresult = (e) => {
-    const transcript = e.results[0][0].transcript;
-    if (!transcript) return;
-
-    chatInput.value = transcript; // set the transcript in input
-    handleChat();                // immediately send to chatbot
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    chatInput.value = transcript;
+    handleChat();
   };
 
-  micBtn.addEventListener("click", async () => {
-    if (!isListening) {
-      try {
-        // Ask for mic permission
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        recognition.start();
-      } catch (err) {
-        console.error("Microphone access denied:", err);
-        alert("Please allow microphone access in your browser.");
-      }
-    } else {
-      recognition.stop();
-    }
-  });
+  recognition.onerror = () => {
+    listening = false;
+    micBtn.textContent = "mic";
+  };
 });
+
 
 
 
@@ -469,4 +479,79 @@ async function testBackendConnection() {
 // Test connection on page load
 document.addEventListener('DOMContentLoaded', function() {
   testBackendConnection();
+});
+
+
+function showTypingIndicator() {
+  const typingLi = document.createElement("li");
+  typingLi.className = "chat incoming typing";
+
+  typingLi.innerHTML = `
+    <span class="material-symbols-outlined">smart_toy</span>
+    <div class="bot-message-container">
+      <div class="typing-indicator">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+
+  chatbox.appendChild(typingLi);
+  chatbox.scrollTo(0, chatbox.scrollHeight);
+
+  return typingLi;
+}
+function convertTypingToMessage(incomingChatli) {
+  incomingChatli.className = "chat incoming";
+
+  incomingChatli.innerHTML = `
+    <span class="material-symbols-outlined">smart_toy</span>
+    <div class="bot-message-container">
+      <p></p>
+      <button class="speak-btn material-symbols-outlined">volume_up</button>
+    </div>
+  `;
+
+  return incomingChatli.querySelector("p");
+}
+
+// speaker functionality
+// ===== SPEAKER BUTTON FIX =====
+let voices = [];
+
+function loadVoices() {
+  voices = window.speechSynthesis.getVoices();
+}
+
+// Load voices (important for Chrome)
+window.speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+// Event delegation for dynamically created buttons
+document.addEventListener("click", (e) => {
+  const speakBtn = e.target.closest(".speak-btn");
+  if (!speakBtn) return;
+
+  const messageText = speakBtn.parentElement.querySelector("p")?.innerText;
+  if (!messageText) return;
+
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    speakBtn.textContent = "volume_up"; // speaker icon
+    return;
+  }
+
+  speakBtn.textContent = "volume_off"; // muted icon while speaking
+
+  const utterance = new SpeechSynthesisUtterance(messageText);
+  const englishVoice = voices.find(v => v.lang.startsWith("en"));
+  if (englishVoice) utterance.voice = englishVoice;
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  utterance.onend = () => {
+    speakBtn.textContent = "volume_up"; // restore icon when done
+  };
+
+  window.speechSynthesis.speak(utterance);
 });
