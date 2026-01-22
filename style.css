@@ -1056,3 +1056,6 @@ body.light-mode #sidebar-toggle {
   50% { transform: scale(1.2); }
   100% { transform: scale(1); }
 }
+body.capacitor-app .navbar {
+  padding-top: 30px; /* Add some space so it’s not covered */
+}
