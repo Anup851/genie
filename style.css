@@ -1085,7 +1085,7 @@ body.in-app #close-chatbot {
 /* APP ONLY: close button a bit left */
 body.in-app .chatbot header .close-btn {
   top: var(--space-md) !important;
-  right: 12px !important;
+  right: 18px !important;
 }
 
 
