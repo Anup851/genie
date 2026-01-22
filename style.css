@@ -1057,18 +1057,20 @@ body.light-mode #sidebar-toggle {
   100% { transform: scale(1); }
 }
 
-/* Only inside the app */
-/* APP ONLY: body padding doesn't move fixed elements, so move .chatbot */
+/* APP ONLY: move chatbot below status bar */
 body.in-app .chatbot {
-  top: 26px !important;                 /* change to 32px if needed */
-  height: calc(100vh - 24px) !important;
+  top: 36px !important;
+  height: calc(100vh - 36px) !important;
 }
-/* APP ONLY: keep close button inside header flow */
+
+/* APP ONLY: keep close button inside header */
 body.in-app #close-chatbot {
   position: absolute !important;
 }
+
+/* APP ONLY: align close button with header */
 body.in-app .chatbot header .close-btn {
-  top: calc(var(--space-md) + 36px) !important;
+  top: var(--space-md) !important;
 }
 
 
