@@ -25,11 +25,13 @@ function getUserId() {
   return userId;
 }
 // app view 
-document.addEventListener('DOMContentLoaded', () => {
-  if (window.Capacitor && window.Capacitor.isNative) {
-    document.body.classList.add('capacitor-app');
+document.addEventListener("DOMContentLoaded", async () => {
+  if (window.Capacitor?.isNativePlatform?.()) {
+    const { StatusBar } = await import("@capacitor/status-bar");
+    await StatusBar.setOverlaysWebView({ overlay: false });
   }
 });
+
 
 // Initialize user ID when page loads
 document.addEventListener('DOMContentLoaded', function() {
