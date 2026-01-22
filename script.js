@@ -27,16 +27,20 @@ function getUserId() {
 // app view 
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.Capacitor?.isNativePlatform?.()) {
-    const { StatusBar } = await import("@capacitor/status-bar");
-    await StatusBar.setOverlaysWebView({ overlay: false });
+    document.body.classList.add("in-app");
+
+    // Use Capacitor global plugin (NO import)
+    try {
+      const StatusBar = window.Capacitor?.Plugins?.StatusBar;
+      if (StatusBar) {
+        await StatusBar.setOverlaysWebView({ overlay: false });
+      }
+    } catch (e) {
+      console.log("StatusBar overlay fix failed:", e);
+    }
   }
 });
 
-document.addEventListener("DOMContentLoaded", () => {
-  if (window.Capacitor?.isNativePlatform?.()) {
-    document.body.classList.add("in-app");
-  }
-});
 
 
 
