@@ -32,6 +32,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.Capacitor?.isNativePlatform?.()) {
+    document.body.classList.add("in-app");
+  }
+});
+
+
 
 // Initialize user ID when page loads
 document.addEventListener('DOMContentLoaded', function() {
