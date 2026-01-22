@@ -1058,9 +1058,23 @@ body.light-mode #sidebar-toggle {
 }
 
 /* APP ONLY: move chatbot below status bar */
+/* APP ONLY: move chatbot below status bar */
 body.in-app .chatbot {
   top: 36px !important;
   height: calc(100vh - 36px) !important;
+}
+
+/* APP ONLY: move sidebar below status bar */
+body.in-app .history-sidebar {
+  top: 36px !important;
+  height: calc(100vh - 36px) !important;
+}
+
+@media (max-width: 480px) {
+  body.in-app .history-sidebar {
+    top: 36px !important;
+    height: calc(100vh - 36px) !important;
+  }
 }
 
 /* APP ONLY: keep close button inside header */
@@ -1068,10 +1082,12 @@ body.in-app #close-chatbot {
   position: absolute !important;
 }
 
-/* APP ONLY: align close button with header */
+/* APP ONLY: close button a bit left */
 body.in-app .chatbot header .close-btn {
   top: var(--space-md) !important;
+  right: 12px !important;
 }
+
 
 
 
