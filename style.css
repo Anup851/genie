@@ -1058,19 +1058,9 @@ body.light-mode #sidebar-toggle {
 }
 
 /* Only inside the app */
-body.in-app {
-  padding-top: 24px; /* adjust: try 24/28/32 */
-}
-
-/* If your header is fixed, add padding to header instead */
-body.in-app header,
-body.in-app .navbar,
-body.in-app .topbar {
-  padding-top: 24px; /* adjust as needed */
-}
-body.in-app .chat-input,
-body.in-app .input-bar {
-  padding-bottom: 12px;
-  margin-bottom: env(safe-area-inset-bottom);
+/* APP ONLY: body padding doesn't move fixed elements, so move .chatbot */
+body.in-app .chatbot {
+  top: 24px !important;                 /* change to 32px if needed */
+  height: calc(100vh - 24px) !important;
 }
 
