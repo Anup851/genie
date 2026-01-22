@@ -24,6 +24,12 @@ function getUserId() {
   }
   return userId;
 }
+// app view 
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.Capacitor && window.Capacitor.isNative) {
+    document.body.classList.add('capacitor-app');
+  }
+});
 
 // Initialize user ID when page loads
 document.addEventListener('DOMContentLoaded', function() {
