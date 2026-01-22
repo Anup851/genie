@@ -1063,4 +1063,8 @@ body.in-app .chatbot {
   top: 24px !important;                 /* change to 32px if needed */
   height: calc(100vh - 24px) !important;
 }
+body.in-app .chatbot header .close-btn {
+  top: calc(var(--space-md) + 28px) !important;
+}
+
 
