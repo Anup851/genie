@@ -618,27 +618,31 @@ function ensureMsgActions(container) {
 }
 
 
-// ===== APP VIEWPORT FIX (keyboard resize safe) =====
+// ===== APP VIEWPORT FIX (keyboard + status bar safe) =====
 function applyAppViewportVars() {
   const vv = window.visualViewport;
 
-  // Fallbacks (desktop)
   const h = vv ? Math.round(vv.height) : window.innerHeight;
   const top = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
 
-  document.documentElement.style.setProperty("--app-vh", `${Math.round((visualViewport?.height || innerHeight))}px`);
-document.documentElement.style.setProperty("--safe-top", `${Math.max(0, Math.round(visualViewport?.offsetTop || 0))}px`);
-
+  document.documentElement.style.setProperty("--app-vh", h + "px");
+  document.documentElement.style.setProperty("--safe-top", top + "px");
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  // If you already added class in HTML, keep it.
-  // Otherwise force in-app for app builds:
   document.body.classList.add("in-app");
 
   applyAppViewportVars();
 
   window.addEventListener("resize", applyAppViewportVars);
-  window.visualViewport?.addEventListener("resize", applyAppViewportVars);
-  window.visualViewport?.addEventListener("scroll", applyAppViewportVars);
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", applyAppViewportVars);
+    window.visualViewport.addEventListener("scroll", applyAppViewportVars);
+  }
+
+  // Extra: fixes "half screen" after keyboard closes (some Android WebViews)
+  document.addEventListener("focusin", () => setTimeout(applyAppViewportVars, 50));
+  document.addEventListener("focusout", () => setTimeout(applyAppViewportVars, 150));
 });
+
