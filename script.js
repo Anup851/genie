@@ -617,49 +617,54 @@ function ensureMsgActions(container) {
   container.appendChild(actions);
 }
 
-// ===== KEEP APP HEIGHT SAME WHEN KEYBOARD OPENS =====
-let BASE_VH = 0;
+// ================= APP FINAL VIEWPORT FIX (WebView safe) =================
+(function () {
+  function setVars() {
+    document.body.classList.add("in-app"); // keep for app build (ok)
 
-function setFixedAppHeightVars() {
-  const vv = window.visualViewport;
+    const vv = window.visualViewport;
 
-  if (!BASE_VH) {
-    // lock base height once (full app height)
-    BASE_VH = Math.round(window.innerHeight);
+    // base full height (before keyboard) — store once
+    if (!window.__BASE_H__) window.__BASE_H__ = window.innerHeight;
+
+    const baseH = window.__BASE_H__;
+    const curH = vv ? vv.height : window.innerHeight;
+
+    // status bar / notch inset (many Android WebViews return 0)
+    let safeTop = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
+    if (safeTop < 10) safeTop = 32; // fallback for Android status bar
+
+    // keyboard height (estimate)
+    // if visualViewport exists, keyboard reduces vv.height
+    const kb = Math.max(0, Math.round(baseH - curH - safeTop));
+
+    // set CSS vars
+    document.documentElement.style.setProperty("--safe-top", safeTop + "px");
+    document.documentElement.style.setProperty("--app-vh", baseH + "px");
+    document.documentElement.style.setProperty("--kb", kb + "px");
   }
 
-  const visibleH = vv ? Math.round(vv.height) : Math.round(window.innerHeight);
-  const offsetTop = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
+  function resetBase() {
+    // when rotate / real resize, reset base height
+    window.__BASE_H__ = window.innerHeight;
+    setVars();
+  }
 
-  // keyboard height = base height - visible height
-  const kb = Math.max(0, BASE_VH - visibleH);
+  window.addEventListener("DOMContentLoaded", () => {
+    setVars();
+    setTimeout(setVars, 50);
+    setTimeout(setVars, 200);
 
-  // Some Android WebViews report offsetTop=0 always; use small fallback
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const safeTop = (isAndroid && offsetTop === 0) ? 28 : offsetTop;
+    window.addEventListener("resize", () => setTimeout(setVars, 0));
+    window.addEventListener("orientationchange", () => setTimeout(resetBase, 100));
 
-  document.documentElement.style.setProperty("--app-vh", BASE_VH + "px");   // fixed height
-  document.documentElement.style.setProperty("--safe-top", safeTop + "px"); // statusbar
-  document.documentElement.style.setProperty("--kb", kb + "px");            // keyboard height
-}
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", setVars);
+      window.visualViewport.addEventListener("scroll", setVars);
+    }
 
-window.addEventListener("DOMContentLoaded", () => {
-  document.body.classList.add("in-app");
-  setFixedAppHeightVars();
-
-  window.addEventListener("resize", () => {
-    // if device rotates, reset base
-    BASE_VH = Math.round(window.innerHeight);
-    setFixedAppHeightVars();
+    // keyboard open/close reliable triggers
+    document.addEventListener("focusin", () => setTimeout(setVars, 50));
+    document.addEventListener("focusout", () => setTimeout(setVars, 200));
   });
-
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", setFixedAppHeightVars);
-    window.visualViewport.addEventListener("scroll", setFixedAppHeightVars);
-  }
-
-  // extra stability on Android
-  document.addEventListener("focusin", () => setTimeout(setFixedAppHeightVars, 50));
-  document.addEventListener("focusout", () => setTimeout(setFixedAppHeightVars, 150));
-});
-
+})();
