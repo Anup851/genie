@@ -262,6 +262,8 @@ messageElement.innerHTML = "Thinking<span class='dots'></span>";
       .replace(/\n/g, "<br>");
 
     messageElement.innerHTML = `<div class="bot-message-content">${finalText}</div>`;
+ensureMsgActions(messageElement.closest(".bot-message-container"));
+
 
 
     // Save clean text to memory
@@ -504,16 +506,13 @@ function convertTypingToMessage(incomingChatli) {
   incomingChatli.innerHTML = `
     <div class="bot-message-container">
       <p></p>
-
-      <div class="msg-actions">
-        <button class="copy-btn material-symbols-outlined" title="Copy">content_copy</button>
-        <button class="speak-btn material-symbols-outlined" title="Speak">volume_up</button>
-      </div>
     </div>
   `;
 
   return incomingChatli.querySelector("p");
 }
+
+
 // ===== COPY BUTTON FUNCTIONALITY =====
 document.addEventListener("click", (e) => {
   const copyBtn = e.target.closest(".copy-btn");
@@ -579,5 +578,17 @@ document.addEventListener("click", (e) => {
 
 
 
+function ensureMsgActions(container) {
+  // If already exists, do nothing
+  if (container.querySelector(".msg-actions")) return;
 
+  const actions = document.createElement("div");
+  actions.className = "msg-actions";
 
+  actions.innerHTML = `
+    <button class="copy-btn material-symbols-outlined" title="Copy">content_copy</button>
+    <button class="speak-btn material-symbols-outlined" title="Speak">volume_up</button>
+  `;
+
+  container.appendChild(actions);
+}
