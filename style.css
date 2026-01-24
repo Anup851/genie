@@ -1202,20 +1202,22 @@ body.in-app .history-sidebar{
   }
 }
 /* ===== APP: Fix keyboard shrinking + half screen bug ===== */
-body.in-app{
-  /* fallback values */
-  --app-vh: 100vh;
-  --safe-top: env(safe-area-inset-top, 24px);
-}
-
-/* Use true visual viewport height from JS */
-body.in-app .chatbot{
-  top: var(--safe-top) !important;
-  height: calc(var(--app-vh) - var(--safe-top)) !important;
+/* ===== FINAL: Sidebar safe-area (beats all earlier rules) ===== */
+body.in-app .history-sidebar,
+body.in-app .history-sidebar.active,
+body.in-app.show-history .history-sidebar,
+body.in-app.show-history .history-sidebar.active{
+  top: var(--safe-top, env(safe-area-inset-top, 24px)) !important;
+  height: calc(var(--app-vh, 100vh) - var(--safe-top, env(safe-area-inset-top, 24px))) !important;
   bottom: auto !important;
 }
 
-/* Prevent container from forcing wrong height in app */
-body.in-app .container{
-  height: var(--app-vh) !important;
+/* If you have any translateY or weird offsets, hard reset */
+body.in-app .history-sidebar{
+  transform: translateX(-100%) translateY(0) !important;
 }
+body.in-app.show-history .history-sidebar,
+body.in-app .history-sidebar.active{
+  transform: translateX(0) translateY(0) !important;
+}
+
