@@ -617,34 +617,49 @@ function ensureMsgActions(container) {
   container.appendChild(actions);
 }
 
-// ===== APP VIEWPORT FIX (Android WebView safe) =====
-function applyAppViewportVars() {
+// ===== KEEP APP HEIGHT SAME WHEN KEYBOARD OPENS =====
+let BASE_VH = 0;
+
+function setFixedAppHeightVars() {
   const vv = window.visualViewport;
 
-  const appVh = vv ? Math.round(vv.height) : window.innerHeight;
-  let safeTop = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
+  if (!BASE_VH) {
+    // lock base height once (full app height)
+    BASE_VH = Math.round(window.innerHeight);
+  }
 
-  // 🔥 Android WebView often reports offsetTop = 0 even with status bar
+  const visibleH = vv ? Math.round(vv.height) : Math.round(window.innerHeight);
+  const offsetTop = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
+
+  // keyboard height = base height - visible height
+  const kb = Math.max(0, BASE_VH - visibleH);
+
+  // Some Android WebViews report offsetTop=0 always; use small fallback
   const isAndroid = /Android/i.test(navigator.userAgent);
-  if (isAndroid && safeTop === 0) safeTop = 28; // try 28; if still overlap use 32
+  const safeTop = (isAndroid && offsetTop === 0) ? 28 : offsetTop;
 
-  document.documentElement.style.setProperty("--app-vh", appVh + "px");
-  document.documentElement.style.setProperty("--safe-top", safeTop + "px");
+  document.documentElement.style.setProperty("--app-vh", BASE_VH + "px");   // fixed height
+  document.documentElement.style.setProperty("--safe-top", safeTop + "px"); // statusbar
+  document.documentElement.style.setProperty("--kb", kb + "px");            // keyboard height
 }
 
 window.addEventListener("DOMContentLoaded", () => {
   document.body.classList.add("in-app");
+  setFixedAppHeightVars();
 
-  applyAppViewportVars();
-
-  window.addEventListener("resize", applyAppViewportVars);
+  window.addEventListener("resize", () => {
+    // if device rotates, reset base
+    BASE_VH = Math.round(window.innerHeight);
+    setFixedAppHeightVars();
+  });
 
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", applyAppViewportVars);
-    window.visualViewport.addEventListener("scroll", applyAppViewportVars);
+    window.visualViewport.addEventListener("resize", setFixedAppHeightVars);
+    window.visualViewport.addEventListener("scroll", setFixedAppHeightVars);
   }
 
-  // Extra: fixes "half screen" after keyboard close on Android
-  document.addEventListener("focusin", () => setTimeout(applyAppViewportVars, 50));
-  document.addEventListener("focusout", () => setTimeout(applyAppViewportVars, 150));
+  // extra stability on Android
+  document.addEventListener("focusin", () => setTimeout(setFixedAppHeightVars, 50));
+  document.addEventListener("focusout", () => setTimeout(setFixedAppHeightVars, 150));
 });
+
