@@ -10,6 +10,30 @@ const welcomeText = document.querySelector(".welcome");
 const sidebarToggle = document.getElementById("sidebar-toggle");
 const closeSidebarBtn = document.getElementById("close-sidebar");
 
+// ===== APP: Responsive safe-top (prevents status bar overlap) =====
+function applySafeTop() {
+  // visualViewport works well on mobile browsers / WebView
+  const vv = window.visualViewport;
+  if (!vv) return;
+
+  // Difference between layout viewport and visual viewport top
+  // Usually equals status bar / notch area in many WebViews
+  const topInset = Math.max(0, Math.round(vv.offsetTop || 0));
+
+  // If offsetTop is 0 (some Android), keep fallback 24px
+  if (topInset > 0) {
+    document.body.style.setProperty("--safe-top", topInset + "px");
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  if (document.body.classList.contains("in-app")) {
+    applySafeTop();
+    window.addEventListener("resize", applySafeTop);
+    window.visualViewport?.addEventListener("resize", applySafeTop);
+    window.visualViewport?.addEventListener("scroll", applySafeTop);
+  }
+});
 
 // User management with persistence
 function getUserId() {
