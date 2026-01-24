@@ -617,16 +617,19 @@ function ensureMsgActions(container) {
   container.appendChild(actions);
 }
 
-
-// ===== APP VIEWPORT FIX (keyboard + status bar safe) =====
+// ===== APP VIEWPORT FIX (Android WebView safe) =====
 function applyAppViewportVars() {
   const vv = window.visualViewport;
 
-  const h = vv ? Math.round(vv.height) : window.innerHeight;
-  const top = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
+  const appVh = vv ? Math.round(vv.height) : window.innerHeight;
+  let safeTop = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
 
-  document.documentElement.style.setProperty("--app-vh", h + "px");
-  document.documentElement.style.setProperty("--safe-top", top + "px");
+  // 🔥 Android WebView often reports offsetTop = 0 even with status bar
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if (isAndroid && safeTop === 0) safeTop = 28; // try 28; if still overlap use 32
+
+  document.documentElement.style.setProperty("--app-vh", appVh + "px");
+  document.documentElement.style.setProperty("--safe-top", safeTop + "px");
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -641,8 +644,7 @@ window.addEventListener("DOMContentLoaded", () => {
     window.visualViewport.addEventListener("scroll", applyAppViewportVars);
   }
 
-  // Extra: fixes "half screen" after keyboard closes (some Android WebViews)
+  // Extra: fixes "half screen" after keyboard close on Android
   document.addEventListener("focusin", () => setTimeout(applyAppViewportVars, 50));
   document.addEventListener("focusout", () => setTimeout(applyAppViewportVars, 150));
 });
-
