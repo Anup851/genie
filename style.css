@@ -2,69 +2,78 @@
 
 /* CSS Variables for Modern Theme */
 :root {
-    /* Modern Color Palette */
-    --primary-bg: #0a0b0f;              /* Deep dark background */
-    --secondary-bg: #111219;            /* Slightly lighter dark */
-    --card-bg: rgba(17, 18, 25, 0.8);   /* Semi-transparent cards */
-    --accent-primary: #6366f1;          /* Indigo primary */
-    --accent-secondary: #8b5cf6;        /* Purple secondary */
-    --accent-tertiary: #06b6d4;         /* Cyan accent */
-    --accent-quaternary: #f59e0b;       /* Amber accent */
-    --text-primary: #f8fafc;            /* Light text */
-    --text-secondary: #cbd5e1;          /* Muted text */
-    --text-muted: #64748b;              /* Very muted text */
-    --white: #ffffff;
-    --success: #10b981;
-    --error: #ef4444;
-    
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-    --gradient-secondary: linear-gradient(135deg, var(--accent-tertiary), var(--accent-quaternary));
-    --gradient-hero: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    
-    /* Typography */
-    --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-weight-light: 300;
-    --font-weight-normal: 400;
-    --font-weight-medium: 500;
-    --font-weight-semibold: 600;
-    --font-weight-bold: 700;
-    --font-weight-extrabold: 800;
-    
-    /* Font Sizes */
-    --font-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
-    --font-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
-    --font-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
-    --font-lg: clamp(1.125rem, 1rem + 0.625vw, 1.375rem);
-    --font-xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.625rem);
-    --font-2xl: clamp(1.5rem, 1.3rem + 1vw, 2rem);
-    --font-3xl: clamp(1.875rem, 1.6rem + 1.375vw, 2.5rem);
-    
-    /* Spacing */
-    --space-xs: 0.5rem;
-    --space-sm: 1rem;
-    --space-md: 1.5rem;
-    --space-lg: 2rem;
-    --space-xl: 3rem;
-    
-    /* Shadows & Effects */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
-    --shadow-glow: 0 0 50px rgba(99, 102, 241, 0.3);
-    
-    /* Border Radius */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 24px;
-    --radius-full: 9999px;
-    
-    /* Animations */
-    --transition-fast: 0.15s ease;
-    --transition-base: 0.3s ease;
-    --transition-slow: 0.6s ease;
+  /* Modern Color Palette */
+  --primary-bg: #0a0b0f;              /* Deep dark background */
+  --secondary-bg: #111219;            /* Slightly lighter dark */
+  --card-bg: rgba(17, 18, 25, 0.8);   /* Semi-transparent cards */
+  --accent-primary: #6366f1;          /* Indigo primary */
+  --accent-secondary: #8b5cf6;        /* Purple secondary */
+  --accent-tertiary: #06b6d4;         /* Cyan accent */
+  --accent-quaternary: #f59e0b;       /* Amber accent */
+  --text-primary: #f8fafc;            /* Light text */
+  --text-secondary: #cbd5e1;          /* Muted text */
+  --text-muted: #64748b;              /* Very muted text */
+  --white: #ffffff;
+  --success: #10b981;
+  --error: #ef4444;
+
+  /* Gradients (keep for buttons/hero, not used for chat bubbles now) */
+  --gradient-primary: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  --gradient-secondary: linear-gradient(135deg, var(--accent-tertiary), var(--accent-quaternary));
+  --gradient-hero: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+  /* Typography */
+--font-primary: system-ui, -apple-system, BlinkMacSystemFont,
+                "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+--font-weight-light: 400;
+--font-weight-normal: 400;
+--font-weight-medium: 500;
+--font-weight-semibold: 600;
+--font-weight-bold: 600;
+--font-weight-extrabold: 600;
+
+
+  /* Font Sizes (ChatGPT-like, calm & readable) */
+--font-xs: clamp(0.75rem, 0.72rem + 0.15vw, 0.8rem);
+--font-sm: clamp(0.85rem, 0.82rem + 0.18vw, 0.9rem);
+--font-base: clamp(0.95rem, 0.92rem + 0.2vw, 1rem);   /* main chat text */
+--font-lg: clamp(1.05rem, 1rem + 0.25vw, 1.15rem);
+--font-xl: clamp(1.2rem, 1.15rem + 0.35vw, 1.3rem);
+--font-2xl: clamp(1.35rem, 1.3rem + 0.45vw, 1.55rem);
+--font-3xl: clamp(1.6rem, 1.55rem + 0.6vw, 1.85rem);
+
+
+  /* Spacing */
+  --space-xs: 0.5rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+
+  /* Shadows & Effects */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 50px rgba(99, 102, 241, 0.3);
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Animations */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.3s ease;
+  --transition-slow: 0.6s ease;
+
+  /* ===== Chat bubble theme (matches background) ===== */
+  --bubble-in: var(--secondary-bg);                 /* incoming = same as chatbox */
+  --bubble-out: var(--secondary-bg);                /* outgoing = same as chatbox */
+  --bubble-out-border: rgba(255, 255, 255, 0.14);   /* outgoing border only */
 }
 
 * {
@@ -112,54 +121,26 @@ html, body {
 }
 
 .welcomes span {
-  opacity: 0; 
+  opacity: 0;
   display: inline-block;
-  animation: revealText 4s steps(5) forwards; 
+  animation: revealText 4s steps(5) forwards;
   animation-delay: 0s;
 }
 
-.welcomes span:nth-child(1) {
-  animation-delay: 0.5s;
-}
-
-.welcomes span:nth-child(2) {
-  animation-delay: 1s;
-}
-
-.welcomes span:nth-child(3) {
-  animation-delay: 1.5s;
-}
-
-.welcomes span:nth-child(4) {
-  animation-delay: 2s;
-}
-
-.welcomes span:nth-child(5) {
-  animation-delay: 2.5s;
-}
+.welcomes span:nth-child(1) { animation-delay: 0.5s; }
+.welcomes span:nth-child(2) { animation-delay: 1s; }
+.welcomes span:nth-child(3) { animation-delay: 1.5s; }
+.welcomes span:nth-child(4) { animation-delay: 2s; }
+.welcomes span:nth-child(5) { animation-delay: 2.5s; }
 
 .welcome p1 {
   font-size: var(--font-base);
   color: var(--text-secondary);
 }
 
-@media (max-width: 991px) {
-  .welcome {
-    font-size: var(--font-2xl);
-  }
-}
-
-@media (max-width: 767px) {
-  .welcome {
-    font-size: var(--font-xl);
-  }
-}
-
-@media (max-width: 575px) {
-  .welcome {
-    font-size: var(--font-lg);
-  }
-}
+@media (max-width: 991px) { .welcome { font-size: var(--font-2xl); } }
+@media (max-width: 767px) { .welcome { font-size: var(--font-xl); } }
+@media (max-width: 575px) { .welcome { font-size: var(--font-lg); } }
 
 /* Chatbot container */
 .chatbot {
@@ -228,28 +209,31 @@ body.show-chatbot .chatbot {
   position: relative;
 }
 
+/* ✅ Outgoing (user): same bg + border box */
 .chatbox .outgoing p {
-  background: var(--gradient-primary);
-  color: var(--white);
+  background: var(--bubble-out);
+  border: 1px solid var(--bubble-out-border);
+  color: var(--text-primary);
   padding: var(--space-sm);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
   position: relative;
-  left: -17%;
+  left: auto;          /* removed old -17% offset */
+  margin-left: auto;   /* align right properly */
   max-width: 80%;
-  font-size: var(--font-base);
-  border: none;
-  box-shadow: var(--shadow-sm);
+  /* font-size: var(--font-base); */
+  box-shadow: none;    /* clean */
 }
 
+/* ✅ Incoming (bot): same bg, no border */
 .chatbox .incoming p {
-   background: var(--gradient-primary);
-  color: var(--white);
+  background: var(--bubble-in);
+  border: none;
+  color: var(--text-primary);
   padding: var(--space-sm);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
   max-width: 80%;
-  font-size: var(--font-base);
-  border: none;
-  box-shadow: var(--shadow-sm);
+  /* font-size: var(--font-base); */
+  box-shadow: none;
 }
 
 .chatbox .incoming .bot-message-container p {
@@ -320,6 +304,15 @@ body.show-chatbot .chatbot {
 .chat-input textarea:valid ~ span {
   visibility: visible;
 }
+
+@keyframes revealText {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  50% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
 
 /* Sidebar for search history */
 .history-sidebar {
@@ -638,67 +631,94 @@ body.show-history .chatbot {
   }
 }
 
-/* Light Mode Styles */
+/* ================= LIGHT MODE STYLES (FINAL) ================= */
 body.light-mode {
   --primary-bg: #f8fafc;
   --secondary-bg: #ffffff;
   --card-bg: rgba(255, 255, 255, 0.8);
-  --text-primary: #1e293b;     /* dark text */
+
+  --text-primary: #1e293b;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
 }
 
+/* App backgrounds */
 body.light-mode .container {
   background-color: var(--primary-bg);
 }
 
 body.light-mode .chatbot {
   background-color: var(--secondary-bg);
-  border-radius: none;
   box-shadow: none;
-  border-left: 1px solid rgba(0, 0, 0, 0.1);
+  border-left: 1px solid rgba(0,0,0,0.08);
 }
 
 body.light-mode .chatbox {
   background-color: var(--secondary-bg);
 }
 
-body.light-mode .chat-input {
-  background-color: var(--secondary-bg);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-body.light-mode .chatbox .outgoing p {
-  background: var(--gradient-primary);
-  color: var(--white);
-  border: none;
-}
-
-body.light-mode .chatbox .incoming p {
-  background: var(--gradient-primary);
-  color: var(--white);
-  border: none;
-}
-
-body.light-mode .chat-input textarea {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text-primary);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
+/* Header */
 body.light-mode .chatbot header {
   background-color: var(--secondary-bg);
   color: var(--text-primary);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
 }
 
 body.light-mode .chatbot header .close-btn {
   color: var(--text-primary);
 }
 
+/* Chat input */
+body.light-mode .chat-input {
+  background-color: var(--secondary-bg);
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+body.light-mode .chat-input textarea {
+  background: rgba(0,0,0,0.04);
+  color: var(--text-primary);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* ================= CHAT BUBBLES ================= */
+
+/* Incoming (bot) — blends with background */
+body.light-mode .chatbox .incoming p {
+  background: rgba(0,0,0,0.04);
+  color: var(--text-primary);
+  border: none;
+  box-shadow: none;
+}
+
+/* Outgoing (user) — boxed with border */
+/* ===== Light mode outgoing container-style bubble ===== */
+body.light-mode .chatbox .outgoing p {
+  background: #ffffff;                    /* card look */
+  color: var(--text-primary);
+  
+  border: 1px solid rgba(0, 0, 0, 0.12);  /* clean border */
+  border-radius: 14px;                    /* container radius */
+
+  padding: 12px 14px;                     /* comfortable spacing */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.16);/* subtle elevation */
+
+  max-width: 80%;
+}
+
+
+/* ================= COPY + SPEAKER BUTTONS ================= */
+
+/* Ensure buttons visible in light mode */
+body.light-mode .chat.incoming .msg-actions .copy-btn,
+body.light-mode .chat.incoming .msg-actions .speak-btn {
+  color: var(--text-primary) !important;
+  opacity: 1 !important;
+}
+
+/* ================= SIDEBAR ================= */
 body.light-mode .history-sidebar {
   background-color: var(--secondary-bg);
-  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  border-right: 1px solid rgba(0,0,0,0.08);
 }
 
 body.light-mode .history-sidebar h3 {
@@ -706,14 +726,14 @@ body.light-mode .history-sidebar h3 {
 }
 
 body.light-mode .history-list li {
-  background: white;
-  color: black;
-  border: 1.7px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  color: var(--text-primary);
+  border: 1px solid rgba(0,0,0,0.1);
   font-weight: 400;
 }
 
 body.light-mode .history-list li:hover {
-  background-color: rgba(99, 102, 241, 0.1);
+  background-color: rgba(0,0,0,0.04);
 }
 
 body.light-mode .delete-icon {
@@ -724,25 +744,18 @@ body.light-mode .delete-all-btn {
   color: var(--text-primary);
 }
 
-/* 🔹 All Material icons (including robot icons) dark in light mode */
+/* ================= ICON COLORS ================= */
 body.light-mode .material-symbols-outlined,
-body.light-mode .material-icons,
-body.light-mode .robot-icon {
+body.light-mode .material-icons {
   color: var(--text-primary) !important;
 }
 
-body.light-mode #mode-toggle {
+body.light-mode #mode-toggle,
+body.light-mode #mic-btn {
   color: var(--text-primary) !important;
 }
+/* =========================================================== */
 
-body.light-mode #mic-btn,
-body.light-mode .chat-input span {
-  color: var(--text-primary) !important;
-}
-
-body.light-mode .speak-btn {
-  color: var(--text-primary) !important;
-}
 
 #mode-toggle {
   position: absolute;
@@ -922,7 +935,7 @@ body.light-mode #sidebar-toggle {
   
   #close-chatbot {
     position: fixed;
-    left: 95%;
+    left: 90%;
   }
   
   .chat-input {
@@ -1057,37 +1070,52 @@ body.light-mode #sidebar-toggle {
   100% { transform: scale(1); }
 }
 
-/* APP ONLY: move chatbot below status bar */
-/* APP ONLY: move chatbot below status bar */
-body.in-app .chatbot {
-  top: 36px !important;
-  height: calc(100vh - 36px) !important;
+
+
+.chatbox .incoming p{background:var(--secondary-bg)!important;border:none!important;}
+.chatbox .outgoing p{background:var(--secondary-bg)!important;border:1px solid rgba(255,255,255,0.14)!important;left:auto!important;margin-left:auto!important;}
+/* ===== Incoming message actions (copy + speaker) ===== */
+
+.chat.incoming .bot-message-container{
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
 
-/* APP ONLY: move sidebar below status bar */
-body.in-app .history-sidebar {
-  top: 36px !important;
-  height: calc(100vh - 36px) !important;
+/* Buttons row: copy (left) + speaker (right) */
+.chat.incoming .msg-actions{
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+
+  /* Desktop position */
+  transform: translate(-6px, -14px);
 }
 
-@media (max-width: 480px) {
-  body.in-app .history-sidebar {
-    top: 36px !important;
-    height: calc(100vh - 36px) !important;
+/* Mobile position */
+@media (max-width: 425px){
+  .chat.incoming .msg-actions{
+    transform: translate(-36px, -28px);
   }
 }
 
-/* APP ONLY: keep close button inside header */
-body.in-app #close-chatbot {
-  position: absolute !important;
+/* Button styles */
+.chat.incoming .msg-actions .copy-btn,
+.chat.incoming .msg-actions .speak-btn{
+  position: static;
+  background: none;
+  border: none;
+  padding: 0;
+
+  font-size: 18px;
+  cursor: pointer;
+  color: #ffffff;
+  opacity: 1;
 }
 
-/* APP ONLY: close button a bit left */
-body.in-app .chatbot header .close-btn {
-  top: var(--space-md) !important;
-  right: 18px !important;
+.chat.incoming .msg-actions .copy-btn:hover,
+.chat.incoming .msg-actions .speak-btn:hover{
+  opacity: 0.85;
 }
-
-
-
 
