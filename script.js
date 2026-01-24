@@ -626,8 +626,9 @@ function applyAppViewportVars() {
   const h = vv ? Math.round(vv.height) : window.innerHeight;
   const top = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
 
-  document.documentElement.style.setProperty("--app-vh", `${h}px`);
-  document.documentElement.style.setProperty("--safe-top", `${top}px`);
+  document.documentElement.style.setProperty("--app-vh", `${Math.round((visualViewport?.height || innerHeight))}px`);
+document.documentElement.style.setProperty("--safe-top", `${Math.max(0, Math.round(visualViewport?.offsetTop || 0))}px`);
+
 }
 
 window.addEventListener("DOMContentLoaded", () => {
