@@ -616,3 +616,28 @@ function ensureMsgActions(container) {
 
   container.appendChild(actions);
 }
+
+
+// ===== APP VIEWPORT FIX (keyboard resize safe) =====
+function applyAppViewportVars() {
+  const vv = window.visualViewport;
+
+  // Fallbacks (desktop)
+  const h = vv ? Math.round(vv.height) : window.innerHeight;
+  const top = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
+
+  document.documentElement.style.setProperty("--app-vh", `${h}px`);
+  document.documentElement.style.setProperty("--safe-top", `${top}px`);
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  // If you already added class in HTML, keep it.
+  // Otherwise force in-app for app builds:
+  document.body.classList.add("in-app");
+
+  applyAppViewportVars();
+
+  window.addEventListener("resize", applyAppViewportVars);
+  window.visualViewport?.addEventListener("resize", applyAppViewportVars);
+  window.visualViewport?.addEventListener("scroll", applyAppViewportVars);
+});
