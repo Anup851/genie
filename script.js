@@ -617,36 +617,37 @@ function ensureMsgActions(container) {
   container.appendChild(actions);
 }
 
-// ================= APP FINAL VIEWPORT FIX (WebView safe) =================
-(function () {
+// ================= APP VIEWPORT FIX (no half-screen after keyboard) =================
+(() => {
+  let BASE = 0;
+
   function setVars() {
-    document.body.classList.add("in-app"); // keep for app build (ok)
+    document.body.classList.add("in-app");
 
     const vv = window.visualViewport;
 
-    // base full height (before keyboard) — store once
-    if (!window.__BASE_H__) window.__BASE_H__ = window.innerHeight;
-
-    const baseH = window.__BASE_H__;
-    const curH = vv ? vv.height : window.innerHeight;
-
-    // status bar / notch inset (many Android WebViews return 0)
+    // Safe top (status bar)
     let safeTop = vv ? Math.max(0, Math.round(vv.offsetTop || 0)) : 0;
-    if (safeTop < 10) safeTop = 32; // fallback for Android status bar
+    if (safeTop < 10) safeTop = 32; // Android fallback (change to 40 if needed)
 
-    // keyboard height (estimate)
-    // if visualViewport exists, keyboard reduces vv.height
-    const kb = Math.max(0, Math.round(baseH - curH - safeTop));
+    // Current visible height
+    const curH = vv ? Math.round(vv.height) : Math.round(window.innerHeight);
 
-    // set CSS vars
+    // IMPORTANT: base height must NEVER shrink
+    // Keep the largest height we ever see (full screen after keyboard closes)
+    BASE = Math.max(BASE, curH + safeTop, Math.round(window.innerHeight));
+
+    // Keyboard height estimate (how much visible height dropped)
+    const kb = Math.max(0, (BASE - safeTop) - curH);
+
     document.documentElement.style.setProperty("--safe-top", safeTop + "px");
-    document.documentElement.style.setProperty("--app-vh", baseH + "px");
+    document.documentElement.style.setProperty("--app-vh", BASE + "px");
     document.documentElement.style.setProperty("--kb", kb + "px");
   }
 
   function resetBase() {
-    // when rotate / real resize, reset base height
-    window.__BASE_H__ = window.innerHeight;
+    // On rotate / real layout changes, allow base to rebuild
+    BASE = 0;
     setVars();
   }
 
@@ -655,16 +656,15 @@ function ensureMsgActions(container) {
     setTimeout(setVars, 50);
     setTimeout(setVars, 200);
 
+    window.addEventListener("orientationchange", () => setTimeout(resetBase, 150));
     window.addEventListener("resize", () => setTimeout(setVars, 0));
-    window.addEventListener("orientationchange", () => setTimeout(resetBase, 100));
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", setVars);
       window.visualViewport.addEventListener("scroll", setVars);
     }
 
-    // keyboard open/close reliable triggers
     document.addEventListener("focusin", () => setTimeout(setVars, 50));
-    document.addEventListener("focusout", () => setTimeout(setVars, 200));
+    document.addEventListener("focusout", () => setTimeout(setVars, 250));
   });
 })();
