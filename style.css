@@ -1161,3 +1161,32 @@ body.light-mode #sidebar-toggle {
   }
 }
 
+/* ===== MOBILE: push header down (prevent status bar overlap) ===== */
+@media (max-width: 480px){
+
+  /* header ko thoda niche */
+  .chatbot header{
+    padding-top: 28px !important;   /* increase/decrease as needed */
+  }
+
+  /* icons + title ko bhi thoda niche */
+  .chatbot header h2{
+    margin-top: 6px !important;
+  }
+
+  #sidebar-toggle,
+
+  #close-chatbot{
+    top: 36px !important;          /* push buttons down */
+  }
+
+  /* close btn little left (as you wanted earlier) */
+  #close-chatbot{
+    right: 14px !important;
+    top: 38px !important;  
+  }
+  #mode-toggle
+  {
+    top: 32px !important;
+  }
+}
