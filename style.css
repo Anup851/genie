@@ -1090,15 +1090,10 @@ body.light-mode #sidebar-toggle {
   gap: 8px;
 
   /* Desktop position */
-  transform: translate(-6px, -14px);
+  
 }
 
-/* Mobile position */
-@media (max-width: 425px){
-  .chat.incoming .msg-actions{
-    transform: translate(-36px, -28px);
-  }
-}
+
 
 /* Button styles */
 .chat.incoming .msg-actions .copy-btn,
@@ -1119,3 +1114,51 @@ body.light-mode #sidebar-toggle {
   opacity: 0.85;
 }
 
+/* ===== Bot message layout: prevent overlap ===== */
+.chat.incoming .bot-message-container{
+  position: relative;
+  max-width: 80%;
+}
+
+/* Reserve space at bottom so buttons never overlap text */
+.chat.incoming .bot-message-container p{
+  padding-bottom: 26px; /* space for buttons */
+}
+
+/* Buttons pinned bottom-right inside bot container */
+.chat.incoming .msg-actions{
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Buttons look */
+.chat.incoming .msg-actions .copy-btn,
+.chat.incoming .msg-actions .speak-btn{
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 18px;
+  color: #ffffff;
+  opacity: 1;
+}
+
+/* Hover */
+.chat.incoming .msg-actions .copy-btn:hover,
+.chat.incoming .msg-actions .speak-btn:hover{
+  opacity: 0.85;
+}
+
+/* Mobile tweak */
+@media (max-width: 425px){
+  .chat.incoming .bot-message-container p{
+    padding-bottom: 30px;
+  }
+  .chat.incoming .msg-actions{
+    bottom: 2px;
+  }
+}
