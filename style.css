@@ -1267,3 +1267,7 @@ body.in-app .chatbox{
     transform: translateX(0) !important;
   }
 }
+/* App: stop 100vh shrinking issues */
+body.in-app .container{
+  height: var(--app-vh, 100vh) !important;
+}
