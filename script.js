@@ -24,25 +24,6 @@ function getUserId() {
   }
   return userId;
 }
-// app view 
-document.addEventListener("DOMContentLoaded", async () => {
-  if (window.Capacitor?.isNativePlatform?.()) {
-    document.body.classList.add("in-app");
-
-    // Use Capacitor global plugin (NO import)
-    try {
-      const StatusBar = window.Capacitor?.Plugins?.StatusBar;
-      if (StatusBar) {
-        await StatusBar.setOverlaysWebView({ overlay: false });
-      }
-    } catch (e) {
-      console.log("StatusBar overlay fix failed:", e);
-    }
-  }
-});
-
-
-
 
 // Initialize user ID when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -103,12 +84,8 @@ function createChatLi(message, className) {
 
     container.appendChild(speakBtn);
 
-    const botIcon = document.createElement("span");
-    botIcon.className = "material-symbols-outlined robot-icon";
-    botIcon.textContent = "smart_toy";
-
-    chatLi.appendChild(botIcon);
     chatLi.appendChild(container);
+
   }
 
   return chatLi;
@@ -508,7 +485,6 @@ function showTypingIndicator() {
   typingLi.className = "chat incoming typing";
 
   typingLi.innerHTML = `
-    <span class="material-symbols-outlined">smart_toy</span>
     <div class="bot-message-container">
       <div class="typing-indicator">
         <span></span><span></span><span></span>
@@ -521,19 +497,43 @@ function showTypingIndicator() {
 
   return typingLi;
 }
+
 function convertTypingToMessage(incomingChatli) {
   incomingChatli.className = "chat incoming";
 
   incomingChatli.innerHTML = `
-    <span class="material-symbols-outlined">smart_toy</span>
     <div class="bot-message-container">
       <p></p>
-      <button class="speak-btn material-symbols-outlined">volume_up</button>
+
+      <div class="msg-actions">
+        <button class="copy-btn material-symbols-outlined" title="Copy">content_copy</button>
+        <button class="speak-btn material-symbols-outlined" title="Speak">volume_up</button>
+      </div>
     </div>
   `;
 
   return incomingChatli.querySelector("p");
 }
+// ===== COPY BUTTON FUNCTIONALITY =====
+document.addEventListener("click", (e) => {
+  const copyBtn = e.target.closest(".copy-btn");
+  if (!copyBtn) return;
+
+  const messageText = copyBtn
+    .closest(".bot-message-container")
+    .querySelector("p")?.innerText;
+
+  if (!messageText) return;
+
+  navigator.clipboard.writeText(messageText).then(() => {
+    copyBtn.textContent = "done";
+    setTimeout(() => {
+      copyBtn.textContent = "content_copy";
+    }, 1200);
+  });
+});
+
+
 
 // speaker functionality
 // ===== SPEAKER BUTTON FIX =====
