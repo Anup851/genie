@@ -1205,22 +1205,29 @@ body.in-app.show-history .history-sidebar,
 body.in-app .history-sidebar.active{
   transform: translateX(0) !important;
 }
-/* ===== APP FINAL FIX: chatbot + sidebar (status bar + keyboard) ===== */
-body.in-app .chatbot,
-body.in-app .history-sidebar{
+/* ===== APP: KEEP LAYOUT SAME HEIGHT (keyboard overlay) ===== */
+body.in-app .chatbot{
   position: fixed !important;
   top: var(--safe-top) !important;
   height: calc(var(--app-vh) - var(--safe-top)) !important;
   bottom: auto !important;
 }
 
-/* Sidebar slide: only X movement */
-body.in-app .history-sidebar{
-  transform: translateX(-100%) !important;
+/* Move input UP by keyboard height */
+body.in-app .chat-input{
+  transform: translateY(calc(-1 * var(--kb))) !important;
 }
-body.in-app.show-history .history-sidebar,
-body.in-app .history-sidebar.active{
-  transform: translateX(0) !important;
+
+/* Give chatbox bottom space so last messages not hidden */
+body.in-app .chatbox{
+  padding-bottom: calc(90px + var(--kb)) !important; /* 90px ~= input height */
+}
+
+/* Sidebar also fixed height under status bar */
+body.in-app .history-sidebar{
+  top: var(--safe-top) !important;
+  height: calc(var(--app-vh) - var(--safe-top)) !important;
+  bottom: auto !important;
 }
 
 
