@@ -192,16 +192,6 @@ function initEventListeners() {
         });
     }
     
-    // Close sidebar button
-    if (closeSidebarBtn) {
-        closeSidebarBtn.addEventListener("click", () => {
-            if (historySidebar) {
-                historySidebar.classList.remove("active");
-                historySidebar.style.display = "none";
-                historySidebar.style.transform = "translateX(-100%)";
-            }
-        });
-    }
     
     // New chat button
     if (newChatBtn) {
@@ -911,6 +901,62 @@ document.addEventListener("DOMContentLoaded", function() {
 document.addEventListener("click", function(e) {
   if (e.target.closest(".start-chat-btn")) {
     setTimeout(fixSidebarCloseButton, 1000);
+  }
+});
+
+// ================= WEBVIEW FIX FOR SIDEBAR CLOSE BUTTON =================
+// ADD THIS AT THE VERY BOTTOM OF THE FILE
+
+// ================= WEBVIEW FIX FOR SIDEBAR CLOSE BUTTON =================
+
+function setupWebViewCloseButton() {
+  console.log("🔧 Setting up WebView close button...");
+  
+  const closeBtn = document.getElementById("close-sidebar");
+  const sidebar = document.querySelector(".history-sidebar");
+  
+  if (!closeBtn || !sidebar) {
+    console.log("⏳ WebView: Waiting for elements...");
+    return;
+  }
+  
+  console.log("✅ WebView: Found close button and sidebar");
+  
+  // SIMPLEST SOLUTION: Direct onclick
+  closeBtn.onclick = function(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    console.log("🎯 WebView: Close button CLICKED!");
+    
+    // Close sidebar
+    sidebar.classList.remove("active");
+    
+    // Force hide on mobile
+    if (window.innerWidth <= 480) {
+      sidebar.style.transform = "translateX(-100%)";
+      sidebar.style.display = "none";
+    }
+    
+    return false;
+  };
+  
+  console.log("✅ WebView: Close button setup complete");
+}
+
+// Run setup immediately and multiple times
+setupWebViewCloseButton();
+setTimeout(setupWebViewCloseButton, 500);
+setTimeout(setupWebViewCloseButton, 1000);
+setTimeout(setupWebViewCloseButton, 2000);
+
+// Run when sidebar opens
+document.addEventListener("click", function(e) {
+  if (e.target.closest("#sidebar-toggle") || 
+      e.target.closest(".start-chat-btn")) {
+    console.log("🔄 Sidebar state changed, re-setting up close button...");
+    setTimeout(setupWebViewCloseButton, 300);
   }
 });
 
