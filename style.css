@@ -1210,3 +1210,93 @@ body.light-mode .history-list .no-chats,
 body.light-mode .history-list .error {
   color: #333333 !important;
 }
+
+/* ================= MOBILE INCOMING CHAT LAYOUT ONLY ================= */
+@media (max-width: 480px) {
+  /* Chatbox container */
+  .chatbox {
+    padding: 12px 12px 80px !important;
+  }
+  
+  /* INCOMING messages only (bot): left-aligned with full width */
+  .chat.incoming {
+    justify-content: flex-start !important;
+    margin-left: 8px !important;
+    margin-right: 8px !important;
+    width: calc(100% - 16px) !important;
+  }
+  
+  .chatbox .incoming p,
+  .chat.incoming p {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    border-radius: 18px 18px 18px 4px !important;
+    padding: 12px 14px !important;
+    background: var(--bubble-in) !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Bot message container */
+  .chat.incoming .bot-message-container {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  
+  /* Bot message content */
+  .bot-message-content {
+    width: 100% !important;
+  }
+  
+  /* OUTGOING messages stay AS BEFORE (unchanged) */
+  .chat.outgoing {
+    /* Keep original outgoing styles - don't change */
+    justify-content: flex-end !important;
+  }
+  
+  .chatbox .outgoing p {
+    /* Keep original outgoing styles - don't change */
+    max-width: 80% !important;
+    margin-left: auto !important;
+    margin-right: 8px !important;
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl) !important;
+    background: var(--bubble-out) !important;
+    border: 1px solid var(--bubble-out-border) !important;
+  }
+  
+  /* Code blocks on mobile */
+  .bot-message-content .code-block {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+  }
+  
+  .bot-message-content .code-block pre {
+    padding: 40px 10px 10px !important;
+    font-size: 13px !important;
+  }
+  
+  /* Message actions on mobile */
+  .chat.incoming .msg-actions {
+    right: 10px !important;
+    bottom: 5px !important;
+  }
+  
+  /* Typing indicator spacing */
+  .typing-indicator {
+    padding: 12px 14px !important;
+    border-radius: 18px 18px 18px 4px !important;
+    background: var(--bubble-in) !important;
+    display: inline-block !important;
+  }
+  
+  /* Light mode adjustments for incoming only */
+  body.light-mode .chatbox .incoming p,
+  body.light-mode .chat.incoming p {
+    background: rgba(0, 0, 0, 0.04) !important;
+  }
+}
