@@ -463,27 +463,35 @@ chatInput.addEventListener("keydown", (e) => {
     handleChat();
   }
 });
+
+// ✅ FIX: chatbot toggler should NOT control sidebar
 chatbotToggler.addEventListener("click", () => {
   document.body.classList.toggle("show-chatbot");
-  document.body.classList.toggle("show-history");
+  // ❌ removed: document.body.classList.toggle("show-history");
 });
+
+// ✅ FIX: close button should also close sidebar completely
 closeBtn.addEventListener("click", () => {
   document.body.classList.remove("show-chatbot");
+  historySidebar.classList.remove("active");   // ✅ added
   document.body.classList.remove("show-history");
 });
+
 loadSessionsSidebar();
 
-deleteAllBtn.addEventListener("click", () => {
-  searchHistory = [];
-  localStorage.setItem("searchHistory", JSON.stringify(searchHistory));
-  loadSessionsSidebar();
 
-});
+
 const startChatBtn = document.querySelector(".start-chat-btn");
-startChatBtn.addEventListener("click", () => {
+startChatBtn.addEventListener("click", async () => {
   document.body.classList.add("show-chatbot");
-  document.body.classList.add("show-history");
+
+  // ✅ don’t auto open sidebar
+  historySidebar.classList.remove("active");
+  document.body.classList.remove("show-history");
+
+  await ensureActiveChat();
 });
+
 
 // Dark/light mode toggle
 const toggleButton = document.getElementById("mode-toggle");
