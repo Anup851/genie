@@ -375,7 +375,6 @@ body:not(.chat-started) .history-sidebar {
   opacity: 0 !important;
   visibility: hidden !important;
 }
-
 /* Chat started: sidebar logic */
 .history-sidebar {
   position: fixed;
@@ -391,10 +390,13 @@ body:not(.chat-started) .history-sidebar {
   scrollbar-width: thin;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.3s ease;
+  /* START HIDDEN ON ALL SCREENS */
   transform: translateX(-100%);
+  opacity: 0;
+  visibility: hidden;
 }
 
-/* Desktop: sidebar always visible when chat started */
+/* Desktop: sidebar visible when chat started */
 @media (min-width: 481px) {
   body.chat-started .history-sidebar {
     display: block !important;
@@ -409,20 +411,17 @@ body:not(.chat-started) .history-sidebar {
   body.chat-started .history-sidebar {
     display: block !important;
     transform: translateX(-100%) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
     position: fixed !important;
     z-index: 1001 !important;
     width: 85% !important;
-    opacity: 1 !important;
   }
   
   body.chat-started .history-sidebar.active {
     transform: translateX(0) !important;
-  }
-  
-  /* Mobile chatbot full width */
-  body.chat-started .chatbot {
-    width: 100% !important;
-    left: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 }
 
@@ -546,13 +545,11 @@ body:not(.chat-started) #sidebar-toggle {
 }
 
 /* ================= CLOSE SIDEBAR BUTTON ================= */
-.close-sidebar-btn {
-  display: none !important;
-}
+
 
 @media (max-width: 480px) {
   .close-sidebar-btn {
-    display: block !important;
+    
     background: none !important;
     border: none !important;
     font-size: var(--font-xl) !important;
@@ -1107,6 +1104,7 @@ body.light-mode .new-chat-btn {
   
 }
 
+/* ================= CLOSE SIDEBAR BUTTON ================= */
 .close-sidebar-btn {
   display: block !important;
   visibility: visible !important;
@@ -1120,6 +1118,14 @@ body.light-mode .new-chat-btn {
   border: none !important;
   padding: 8px !important;
   margin: 0 !important;
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+}
+
+/* Show on BOTH desktop and mobile when sidebar is active */
+body.chat-started .history-sidebar .close-sidebar-btn {
+  display: block !important;
 }
 
 /* On mobile, make sure it's positioned correctly */
