@@ -482,17 +482,47 @@ loadSessionsSidebar();
 
 
 
-const startChatBtn = document.querySelector(".start-chat-btn");
-startChatBtn.addEventListener("click", async () => {
-  document.body.classList.add("show-chatbot");
- welcome.style.display = "none";
-  container.style.display = "block";
-  // ✅ don’t auto open sidebar
-  historySidebar.classList.remove("active");
-  document.body.classList.remove("show-history");
+document.addEventListener("DOMContentLoaded", async () => {
+  const container = document.querySelector(".container");
+  const welcome = document.querySelector(".welcome");
+  const startChatBtn = document.querySelector(".start-chat-btn");
 
-  await ensureActiveChat();
+  // start state
+  if (welcome && container) {
+    welcome.style.display = "block";
+    container.style.display = "none";
+  }
+
+  // sidebar closed by default (mobile)
+  historySidebar.classList.remove("active");
+
+  // open chat
+  startChatBtn?.addEventListener("click", async () => {
+    if (welcome && container) {
+      welcome.style.display = "none";
+      container.style.display = "block";
+    }
+
+    document.body.classList.add("show-chatbot");
+
+    // don't auto open sidebar
+    historySidebar.classList.remove("active");
+
+    await ensureActiveChat();
+  });
+
+  // close chat button
+  closeBtn?.addEventListener("click", () => {
+    document.body.classList.remove("show-chatbot");
+    historySidebar.classList.remove("active");
+
+    if (welcome && container) {
+      container.style.display = "none";
+      welcome.style.display = "block";
+    }
+  });
 });
+
 
 
 // Dark/light mode toggle
@@ -507,10 +537,9 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 
-// History sidebar functionality (FIXED: use only .active)
 if (sidebarToggle && closeSidebarBtn) {
   sidebarToggle.addEventListener("click", (e) => {
-    e.stopPropagation(); // prevents immediate outside-click close
+    e.stopPropagation();
     historySidebar.classList.toggle("active");
   });
 
@@ -518,7 +547,6 @@ if (sidebarToggle && closeSidebarBtn) {
     historySidebar.classList.remove("active");
   });
 
-  // close when clicking outside (mobile)
   document.addEventListener("click", (event) => {
     if (
       window.innerWidth <= 480 &&
@@ -530,6 +558,7 @@ if (sidebarToggle && closeSidebarBtn) {
     }
   });
 }
+
 
 
 // ✅ Welcome screen and container management (FIXED)
