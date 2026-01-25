@@ -1106,3 +1106,28 @@ body.light-mode .new-chat-btn {
   }
   
 }
+
+.close-sidebar-btn {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  z-index: 1000 !important;
+  color: var(--text-primary) !important;
+  font-size: var(--font-xl) !important;
+  background: none !important;
+  border: none !important;
+  padding: 8px !important;
+  margin: 0 !important;
+}
+
+/* On mobile, make sure it's positioned correctly */
+@media (max-width: 480px) {
+  .close-sidebar-btn {
+    position: absolute !important;
+    top: 12px !important;
+    right: 12px !important;
+    z-index: 1001 !important;
+  }
+}
