@@ -1383,24 +1383,28 @@ body:not(.chat-started) .history-sidebar {
 }
 
 /* 3) Desktop: show sidebar ONLY after chat-started */
+/* DESKTOP: sidebar visible ONLY after chat started */
 @media (min-width: 481px) {
-  body.chat-started .history-sidebar {
-    display: block !important;
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    width: 250px;
-    height: 100vh;
+  .history-sidebar {
+    display: none !important;
     transform: none !important;
-    z-index: 10;
   }
 
-  /* Chat area should take remaining width only AFTER chat-started */
+  body.chat-started .history-sidebar {
+    display: block !important;
+  }
+
+  /* chatbot takes full width before chat started */
+  .chatbot {
+    width: 100%;
+  }
+
+  /* chatbot shifts when chat started */
   body.chat-started .chatbot {
-    width: calc(100% - 250px) !important;
-    left: auto !important;
+    width: calc(100% - 250px);
   }
 }
+
 
 /* 4) Mobile: show sidebar container after chat-started, but keep it CLOSED by default */
 @media (max-width: 480px) {
