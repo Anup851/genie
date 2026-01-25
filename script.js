@@ -18,6 +18,7 @@ if (newChatBtn) {
 }
 
 
+
 // ===== APP: Responsive safe-top (prevents status bar overlap) =====
 function applySafeTop() {
   // visualViewport works well on mobile browsers / WebView
@@ -484,7 +485,8 @@ loadSessionsSidebar();
 const startChatBtn = document.querySelector(".start-chat-btn");
 startChatBtn.addEventListener("click", async () => {
   document.body.classList.add("show-chatbot");
-
+ welcome.style.display = "none";
+  container.style.display = "block";
   // ✅ don’t auto open sidebar
   historySidebar.classList.remove("active");
   document.body.classList.remove("show-history");
@@ -505,26 +507,30 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 
-// History sidebar functionality
+// History sidebar functionality (FIXED: use only .active)
 if (sidebarToggle && closeSidebarBtn) {
-  sidebarToggle.addEventListener("click", () => {
+  sidebarToggle.addEventListener("click", (e) => {
+    e.stopPropagation(); // prevents immediate outside-click close
     historySidebar.classList.toggle("active");
-    document.body.classList.toggle("show-history");
   });
+
   closeSidebarBtn.addEventListener("click", () => {
     historySidebar.classList.remove("active");
-    document.body.classList.remove("show-history");
   });
+
+  // close when clicking outside (mobile)
   document.addEventListener("click", (event) => {
-    if (window.innerWidth <= 480 && 
-        historySidebar.classList.contains("active") && 
-        !historySidebar.contains(event.target) && 
-        event.target !== sidebarToggle) {
+    if (
+      window.innerWidth <= 480 &&
+      historySidebar.classList.contains("active") &&
+      !historySidebar.contains(event.target) &&
+      event.target !== sidebarToggle
+    ) {
       historySidebar.classList.remove("active");
-      document.body.classList.remove("show-history");
     }
   });
 }
+
 
 // ✅ Welcome screen and container management (FIXED)
 document.addEventListener("DOMContentLoaded", () => {
@@ -540,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ✅ IMPORTANT: do NOT auto-open sidebar
   historySidebar.classList.remove("active");
-  document.body.classList.remove("show-history");
+  
 
   if (startChatBtn) {
     startChatBtn.addEventListener("click", async () => {
@@ -669,7 +675,7 @@ async function testBackendConnection() {
 // Test connection on page load
 document.addEventListener('DOMContentLoaded', async function() {
   testBackendConnection();
-  await ensureActiveChat();   // ✅ add this
+  
 });
 
 
