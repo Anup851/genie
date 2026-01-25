@@ -1174,10 +1174,7 @@ body.light-mode #sidebar-toggle {
     margin-top: 6px !important;
     top: 36px !important; 
   }
-  .history-sidebar #close-sidebar
-  {
-    top: 40px !important; 
-  }
+  
 
   #sidebar-toggle{
     top: 36px !important;          /* push buttons down */
