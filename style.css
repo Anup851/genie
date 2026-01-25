@@ -1166,24 +1166,27 @@ body.light-mode #sidebar-toggle {
 
   /* header ko thoda niche */
   .chatbot header{
-    padding-top: 28px !important;   /* increase/decrease as needed */
+    padding-top: 32px !important;   /* increase/decrease as needed */
   }
 
   /* icons + title ko bhi thoda niche */
   .chatbot header h2{
     margin-top: 6px !important;
+    top: 36px !important; 
+  }
+  .history-sidebar #close-sidebar
+  {
+    top: 40px !important; 
   }
 
-  #sidebar-toggle,
-
-  #close-chatbot{
+  #sidebar-toggle{
     top: 36px !important;          /* push buttons down */
   }
 
   /* close btn little left (as you wanted earlier) */
   #close-chatbot{
     right: 14px !important;
-    top: 38px !important;  
+    top: 40px !important;  
   }
   #mode-toggle
   {
@@ -1302,4 +1305,44 @@ html, body {
 @media (max-width: 480px) {
   .chatbox { padding-left: 30px; padding-right: 10px; }
   .bot-message-content .code-block pre { padding: 44px 10px 10px; }
+}
+
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+      background-color: var(--secondary-bg);
+  border: none;
+  color: #fff;
+
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+
+.new-chat-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Light mode */
+body.light-mode .new-chat-btn {
+  background: #e5e5e5;
+  color: #000;
 }
