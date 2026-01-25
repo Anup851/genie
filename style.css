@@ -17,32 +17,30 @@
   --success: #10b981;
   --error: #ef4444;
 
-  /* Gradients (keep for buttons/hero, not used for chat bubbles now) */
+  /* Gradients */
   --gradient-primary: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   --gradient-secondary: linear-gradient(135deg, var(--accent-tertiary), var(--accent-quaternary));
   --gradient-hero: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 
   /* Typography */
---font-primary: system-ui, -apple-system, BlinkMacSystemFont,
-                "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-primary: system-ui, -apple-system, BlinkMacSystemFont,
+                  "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
---font-weight-light: 400;
---font-weight-normal: 400;
---font-weight-medium: 500;
---font-weight-semibold: 600;
---font-weight-bold: 600;
---font-weight-extrabold: 600;
+  --font-weight-light: 400;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
 
-
-  /* Font Sizes (ChatGPT-like, calm & readable) */
---font-xs: clamp(0.75rem, 0.72rem + 0.15vw, 0.8rem);
---font-sm: clamp(0.85rem, 0.82rem + 0.18vw, 0.9rem);
---font-base: clamp(0.95rem, 0.92rem + 0.2vw, 1rem);   /* main chat text */
---font-lg: clamp(1.05rem, 1rem + 0.25vw, 1.15rem);
---font-xl: clamp(1.2rem, 1.15rem + 0.35vw, 1.3rem);
---font-2xl: clamp(1.35rem, 1.3rem + 0.45vw, 1.55rem);
---font-3xl: clamp(1.6rem, 1.55rem + 0.6vw, 1.85rem);
-
+  /* Font Sizes */
+  --font-xs: clamp(0.75rem, 0.72rem + 0.15vw, 0.8rem);
+  --font-sm: clamp(0.85rem, 0.82rem + 0.18vw, 0.9rem);
+  --font-base: clamp(0.95rem, 0.92rem + 0.2vw, 1rem);
+  --font-lg: clamp(1.05rem, 1rem + 0.25vw, 1.15rem);
+  --font-xl: clamp(1.2rem, 1.15rem + 0.35vw, 1.3rem);
+  --font-2xl: clamp(1.35rem, 1.3rem + 0.45vw, 1.55rem);
+  --font-3xl: clamp(1.6rem, 1.55rem + 0.6vw, 1.85rem);
 
   /* Spacing */
   --space-xs: 0.5rem;
@@ -70,10 +68,10 @@
   --transition-base: 0.3s ease;
   --transition-slow: 0.6s ease;
 
-  /* ===== Chat bubble theme (matches background) ===== */
-  --bubble-in: var(--secondary-bg);                 /* incoming = same as chatbox */
-  --bubble-out: var(--secondary-bg);                /* outgoing = same as chatbox */
-  --bubble-out-border: rgba(255, 255, 255, 0.14);   /* outgoing border only */
+  /* Chat bubble theme */
+  --bubble-in: var(--secondary-bg);
+  --bubble-out: var(--secondary-bg);
+  --bubble-out-border: rgba(255, 255, 255, 0.14);
 }
 
 * {
@@ -88,6 +86,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
+  overflow-x: hidden;
 }
 
 .container {
@@ -139,8 +138,53 @@ html, body {
 }
 
 @media (max-width: 991px) { .welcome { font-size: var(--font-2xl); } }
-@media (max-width: 767px) { .welcome { font-size: var(--font-xl); } }
+@media (max-width: 780px) { .welcome { font-size: var(--font-xl); } }
 @media (max-width: 575px) { .welcome { font-size: var(--font-lg); } }
+
+/* ================= THEME TOGGLE BUTTON (FIXED POSITION) ================= */
+#mode-toggle {
+  position: fixed !important;
+  top: 16px !important;
+  right: 16px !important;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-xl);
+  color: var(--text-primary);
+  padding: 8px;
+  z-index: 1000;
+  transition: all var(--transition-fast);
+  border-radius: 50%;
+  
+  backdrop-filter: blur(10px);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#mode-toggle:hover {
+  background: rgba(0, 0, 0, 0.5);
+  transform: scale(1.05);
+}
+
+/* Light mode theme toggle */
+body.light-mode #mode-toggle {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ================= MAIN LAYOUT ================= */
+/* Welcome screen: hide EVERYTHING except welcome and theme toggle */
+body:not(.chat-started) .history-sidebar,
+body:not(.chat-started) .chatbot,
+body:not(.chat-started) #sidebar-toggle {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 
 /* Chatbot container */
 .chatbot {
@@ -148,7 +192,7 @@ html, body {
   top: 0;
   right: 0;
   bottom: 0;
-  width: calc(100% - 250px);
+  width: 100%;
   background: var(--secondary-bg);
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -158,13 +202,35 @@ html, body {
   transform: scale(0.7);
   transition: all var(--transition-base);
   z-index: 10;
-  max-width: 95%;
+  max-width: 100%;
 }
 
-body.show-chatbot .chatbot {
+body.chat-started .chatbot {
   opacity: 1;
   pointer-events: auto;
   transform: scale(1);
+  display: flex !important;
+}
+
+/* Desktop layout adjustments */
+@media (min-width: 481px) {
+  body.chat-started .chatbot {
+    width: calc(100% - 250px);
+    left: 250px;
+    right: auto;
+  }
+  
+  /* Fix for 768px range - reduce gap */
+  @media (min-width: 481px) and (max-width: 768px) {
+    body.chat-started .chatbot {
+      width: calc(100% - 200px);
+      left: 200px;
+    }
+    
+    .history-sidebar {
+      width: 200px;
+    }
+  }
 }
 
 .chatbot header {
@@ -174,6 +240,7 @@ body.show-chatbot .chatbot {
   text-align: center;
   position: relative;
   flex-shrink: 0;
+  padding-top: 16px !important;
 }
 
 .chatbot header h2 {
@@ -182,15 +249,10 @@ body.show-chatbot .chatbot {
 }
 
 .chatbot header .close-btn {
-  position: absolute;
-  top: var(--space-md);
-  right: var(--space-lg);
-  cursor: pointer;
-  color: var(--text-primary);
-  font-size: var(--font-xl);
+  display: none !important; /* Hide the close button */
 }
 
-/* Chatbox */
+/* ================= CHATBOX ================= */
 .chatbox {
   flex-grow: 1;
   overflow-y: auto;
@@ -209,22 +271,16 @@ body.show-chatbot .chatbot {
   position: relative;
 }
 
-/* ✅ Outgoing (user): same bg + border box */
 .chatbox .outgoing p {
   background: var(--bubble-out);
   border: 1px solid var(--bubble-out-border);
   color: var(--text-primary);
   padding: var(--space-sm);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
-  position: relative;
-  left: auto;          /* removed old -17% offset */
-  margin-left: auto;   /* align right properly */
+  margin-left: auto;
   max-width: 80%;
-  /* font-size: var(--font-base); */
-  box-shadow: none;    /* clean */
 }
 
-/* ✅ Incoming (bot): same bg, no border */
 .chatbox .incoming p {
   background: var(--bubble-in);
   border: none;
@@ -232,8 +288,6 @@ body.show-chatbot .chatbot {
   padding: var(--space-sm);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
   max-width: 80%;
-  /* font-size: var(--font-base); */
-  box-shadow: none;
 }
 
 .chatbox .incoming .bot-message-container p {
@@ -266,7 +320,7 @@ body.show-chatbot .chatbot {
   justify-content: flex-start;
 }
 
-/* Chat input */
+/* ================= CHAT INPUT ================= */
 .chat-input {
   padding: var(--space-sm) var(--space-lg);
   background: var(--card-bg);
@@ -313,8 +367,16 @@ body.show-chatbot .chatbot {
   100% { opacity: 1; }
 }
 
+/* ================= SIDEBAR (COMPLETELY FIXED) ================= */
+/* Welcome screen: absolutely hidden */
+body:not(.chat-started) .history-sidebar {
+  display: none !important;
+  transform: translateX(-100%) !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
 
-/* Sidebar for search history */
+/* Chat started: sidebar logic */
 .history-sidebar {
   position: fixed;
   top: 0;
@@ -323,18 +385,57 @@ body.show-chatbot .chatbot {
   height: 100vh;
   background-color: var(--secondary-bg);
   color: var(--text-primary);
-  padding: var(--space-md);
   box-shadow: var(--shadow-md);
-  display: none;
-  z-index: 10;
+  z-index: 9;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--secondary-bg) var(--secondary-bg);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.3s ease;
+  transform: translateX(-100%);
 }
 
-button.chatbot-toggler {
-  color: #000;
+/* Desktop: sidebar always visible when chat started */
+@media (min-width: 481px) {
+  body.chat-started .history-sidebar {
+    display: block !important;
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* Mobile: sidebar hidden initially, shown when active */
+@media (max-width: 480px) {
+  body.chat-started .history-sidebar {
+    display: block !important;
+    transform: translateX(-100%) !important;
+    position: fixed !important;
+    z-index: 1001 !important;
+    width: 85% !important;
+    opacity: 1 !important;
+  }
+  
+  body.chat-started .history-sidebar.active {
+    transform: translateX(0) !important;
+  }
+  
+  /* Mobile chatbot full width */
+  body.chat-started .chatbot {
+    width: 100% !important;
+    left: 0 !important;
+  }
+}
+
+/* Fix for 768px range - reduce sidebar width */
+@media (min-width: 481px) and (max-width: 768px) {
+  .history-sidebar {
+    width: 200px !important;
+  }
+  
+  body.chat-started .chatbot {
+    width: calc(100% - 200px) !important;
+    left: 200px !important;
+  }
 }
 
 .history-sidebar::-webkit-scrollbar {
@@ -355,11 +456,13 @@ button.chatbot-toggler {
   font-weight: var(--font-weight-semibold);
   padding-bottom: var(--space-sm);
   color: var(--text-primary);
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  margin: 0;
 }
 
 .history-list {
   list-style: none;
-  padding: 0;
+  padding: 0 var(--space-md);
 }
 
 .history-list li {
@@ -393,16 +496,77 @@ button.chatbot-toggler {
   color: var(--error);
 }
 
-/* Show sidebar when active */
-body.show-history .history-sidebar {
-  display: block;
+/* ================= SIDEBAR TOGGLE BUTTON ================= */
+/* Hidden on welcome screen */
+body:not(.chat-started) #sidebar-toggle {
+  display: none !important;
 }
 
-body.show-history .chatbot {
-  width: calc(100% - 250px);
+/* Hidden on desktop */
+@media (min-width: 481px) {
+  #sidebar-toggle {
+    display: none !important;
+  }
 }
 
-/* Delete All Button */
+/* Visible on mobile when chat started */
+@media (max-width: 480px) {
+  body.chat-started #sidebar-toggle {
+    display: flex !important;
+    position: fixed !important;
+    top: 16px !important;
+    left: 16px !important;
+    font-size: var(--font-xl) !important;
+    background: none !important;
+    border: none !important;
+    color: var(--text-primary) !important;
+    cursor: pointer !important;
+    z-index: 1002 !important;
+    padding: 8px !important;
+    border-radius: 50% !important;
+    background: rgba(0, 0, 0, 0.3) !important;
+    backdrop-filter: blur(10px) !important;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Adjust close button position to match */
+  .chatbot header .close-btn {
+    top: 16px !important;
+    right: 16px !important;
+  }
+  
+  /* Adjust chatbot header padding for mobile */
+  .chatbot header {
+    padding-top: 24px !important;
+    padding-bottom: 16px !important;
+  }
+}
+
+/* ================= CLOSE SIDEBAR BUTTON ================= */
+.close-sidebar-btn {
+  display: none !important;
+}
+
+@media (max-width: 480px) {
+  .close-sidebar-btn {
+    display: block !important;
+    background: none !important;
+    border: none !important;
+    font-size: var(--font-xl) !important;
+    color: var(--text-primary) !important;
+    position: absolute !important;
+    top: var(--space-sm) !important;
+    right: var(--space-sm) !important;
+    z-index: 100 !important;
+    cursor: pointer !important;
+    padding: 8px !important;
+  }
+}
+
+/* ================= DELETE ALL BUTTON ================= */
 .delete-all-btn {
   color: var(--text-primary);
   display: flex;
@@ -410,7 +574,7 @@ body.show-history .chatbot {
   justify-content: flex-start;
   background: none;
   border: none;
-  padding: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   font-size: var(--font-base);
   cursor: pointer;
   width: 100%;
@@ -418,6 +582,8 @@ body.show-history .chatbot {
   transition: color var(--transition-fast);
   margin-top: var(--space-md);
   border-radius: var(--radius-md);
+  margin: var(--space-md);
+  width: calc(100% - 2 * var(--space-md));
 }
 
 .delete-all-btn:hover {
@@ -429,7 +595,7 @@ body.show-history .chatbot {
   margin-right: var(--space-xs);
 }
 
-/* Start Chat Button */
+/* ================= START CHAT BUTTON ================= */
 .start-chat-btn {
   background: var(--gradient-primary);
   color: var(--white);
@@ -449,14 +615,13 @@ body.show-history .chatbot {
   box-shadow: var(--shadow-lg);
 }
 
-/* Responsive adjustments */
-@media (max-width: 767px) {
+/* ================= RESPONSIVE ADJUSTMENTS ================= */
+@media (max-width: 769spx) {
   .history-sidebar {
     width: 200px;
-    padding: var(--space-sm);
   }
 
-  body.show-history .chatbot {
+  body.chat-started .chatbot {
     width: calc(100% - 200px);
   }
 
@@ -471,7 +636,6 @@ body.show-history .chatbot {
   .chat-input textarea {
     font-size: var(--font-sm);
   }
-  
 }
 
 @media (max-width: 575px) {
@@ -479,7 +643,7 @@ body.show-history .chatbot {
     width: 180px;
   }
 
-  body.show-history .chatbot {
+  body.chat-started .chatbot {
     width: calc(100% - 180px);
   }
 
@@ -492,152 +656,54 @@ body.show-history .chatbot {
   }
 }
 
-/* Mobile view fixes */
+/* ================= MOBILE VIEW FIXES ================= */
 @media (max-width: 480px) {
   .chatbot {
     width: 100% !important;
-    
-    max-width: 100% !important;
+    left: 0 !important;
   }
 
-  body.show-history .chatbot {
-    width: 100% !important;
-    transform: none;
-  }
-
-  .container {
-    overflow: hidden;
-    width: 100%;
-  }
-
-  /* Outgoing (user) messages to the right */
   .chatbox .outgoing p {
-    position: relative;
-    left: auto;                 /* reset any desktop offset */
-    margin-left: auto;          /* push to right edge */
-    margin-right: 8px;          /* small right gap */
+    margin-left: auto;
+    margin-right: 8px;
     max-width: 85%;
   }
 
-  /* Incoming (bot) messages to the left */
   .chatbox .incoming,
   .chat-incoming {
     display: flex;
     justify-content: flex-start;
-    margin-left: 0 !important; /* no wrapper gap */
+    margin-left: 0 !important;
     padding-left: 0 !important;
-    left: -20px;
   }
 
   .chatbox .incoming p,
   .chat-incoming p {
-    display: flex;
-    left: -20px;
-    margin-left: 0 !important; /* no bubble gap */
-          /* small inner padding so text isn’t glued to edge */
-    max-width: 85%;            /* control width on mobile */
+    margin-left: 0 !important;
+    max-width: 85%;
     border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
   }
 
   .chat-input {
     padding: 10px;
     width: 100%;
-    left: 0 !important;
     gap: 8px;
   }
 
   .chat-input textarea {
     width: 100%;
   }
-
-  #close-chatbot {
-    position: absolute;
-    right: 15px;
-    left: auto;
-  }
-
-  /* History sidebar for mobile */
-  .history-sidebar {
-    width: 85% !important;
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100%;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    z-index: 1001;
-    display: block !important;
-  }
-
-  body.show-history .history-sidebar {
-    transform: translateX(0);
-  }
-
-  body.show-history .chatbot {
-    transform: translateX(0);
-  }
-
-  /* Ensure the background color is consistent */
-  .chatbot,
-  .chatbox,
-  .chat-input {
-    background: var(--secondary-bg);
-  }
-
-  body.light-mode .chatbot,
-  body.light-mode .chatbox,
-  body.light-mode .chat-input {
-    background: var(--secondary-bg);
-  }
 }
 
-
-/* Remove conflicting styles */
-@media (max-width: 480px) {
-  .history-sidebar {
-    width: 100% !important;
-    height: 100% !important;
-    position: fixed !important;
-  }
-  
-  .chatbot {
-    left: 0 !important;
-    width: 100% !important;
-  }
-  
-  .chat-input {
-    left: 0 !important;
-    padding: 10px !important;
-  }
-}
-
-@keyframes revealText {
-  0% {
-    opacity: 0;
-  }
-  25% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-/* ================= LIGHT MODE STYLES (FINAL) ================= */
+/* ================= LIGHT MODE STYLES ================= */
 body.light-mode {
   --primary-bg: #f8fafc;
   --secondary-bg: #ffffff;
   --card-bg: rgba(255, 255, 255, 0.8);
-
   --text-primary: #1e293b;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
+  --bubble-out-border: rgba(0, 0, 0, 0.12);
 }
 
 /* App backgrounds */
@@ -647,7 +713,6 @@ body.light-mode .container {
 
 body.light-mode .chatbot {
   background-color: var(--secondary-bg);
-  box-shadow: none;
   border-left: 1px solid rgba(0,0,0,0.08);
 }
 
@@ -678,42 +743,20 @@ body.light-mode .chat-input textarea {
   border: 1px solid rgba(0,0,0,0.1);
 }
 
-/* ================= CHAT BUBBLES ================= */
-
-/* Incoming (bot) — blends with background */
+/* Chat bubbles */
 body.light-mode .chatbox .incoming p {
   background: rgba(0,0,0,0.04);
   color: var(--text-primary);
-  border: none;
-  box-shadow: none;
 }
 
-/* Outgoing (user) — boxed with border */
-/* ===== Light mode outgoing container-style bubble ===== */
 body.light-mode .chatbox .outgoing p {
-  background: #ffffff;                    /* card look */
+  background: #ffffff;
   color: var(--text-primary);
-  
-  border: 1px solid rgba(0, 0, 0, 0.12);  /* clean border */
-  border-radius: 14px;                    /* container radius */
-
-  padding: 12px 14px;                     /* comfortable spacing */
-  box-shadow: 0 4px 10px rgba(0,0,0,0.16);/* subtle elevation */
-
-  max-width: 80%;
+  border: 1px solid var(--bubble-out-border);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.16);
 }
 
-
-/* ================= COPY + SPEAKER BUTTONS ================= */
-
-/* Ensure buttons visible in light mode */
-body.light-mode .chat.incoming .msg-actions .copy-btn,
-body.light-mode .chat.incoming .msg-actions .speak-btn {
-  color: var(--text-primary) !important;
-  opacity: 1 !important;
-}
-
-/* ================= SIDEBAR ================= */
+/* Sidebar */
 body.light-mode .history-sidebar {
   background-color: var(--secondary-bg);
   border-right: 1px solid rgba(0,0,0,0.08);
@@ -727,7 +770,6 @@ body.light-mode .history-list li {
   background: #ffffff;
   color: var(--text-primary);
   border: 1px solid rgba(0,0,0,0.1);
-  font-weight: 400;
 }
 
 body.light-mode .history-list li:hover {
@@ -742,33 +784,13 @@ body.light-mode .delete-all-btn {
   color: var(--text-primary);
 }
 
-/* ================= ICON COLORS ================= */
-body.light-mode .material-symbols-outlined,
-body.light-mode .material-icons {
+/* Sidebar toggle button in light mode */
+body.light-mode #sidebar-toggle {
   color: var(--text-primary) !important;
+  background: rgba(255, 255, 255, 0.3) !important;
 }
 
-body.light-mode #mode-toggle,
-body.light-mode #mic-btn {
-  color: var(--text-primary) !important;
-}
-/* =========================================================== */
-
-
-#mode-toggle {
-  position: absolute;
-  top: 10px;
-  left: 50px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: var(--font-xl);
-  color: var(--text-primary);
-  padding: 5px;
-  z-index: 100;
-  transition: color var(--transition-fast);
-}
-
+/* ================= MICROPHONE ================= */
 #mic-btn {
   font-size: var(--font-xl);
   color: var(--accent-primary);
@@ -783,27 +805,12 @@ body.light-mode #mic-btn {
 }
 
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-/* Hide or visually disable the sidebar toggle in light mode */
-body.light-mode #sidebar-toggle {
-
-  opacity: 0;           /* make it look disabled */
-  pointer-events: none;   /* actually disable clicking */
-  cursor: default;        /* cursor no longer pointer */
-}
-@media (max-width: 480px) {
-body.light-mode #sidebar-toggle {
-    opacity: 1;
-    pointer-events: auto;
-  }
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
+/* ================= CHAT INPUT LAYOUT ================= */
 .chat-input {
   display: flex;
   align-items: center;
@@ -840,201 +847,173 @@ body.light-mode #sidebar-toggle {
   border-radius: 50%;
 }
 
-.speak-btn {
+/* ================= MESSAGE ACTIONS ================= */
+.chat.incoming .bot-message-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  max-width: 80%;
+}
+
+.chat.incoming .bot-message-container p {
+  padding-bottom: 26px;
+}
+
+.chat.incoming .msg-actions {
   position: absolute;
-  left: 5px;
-  bottom: -25px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat.incoming .msg-actions .copy-btn,
+.chat.incoming .msg-actions .speak-btn {
   background: none;
   border: none;
-  color: var(--text-secondary);
-  font-size: var(--font-xs);
+  padding: 0;
   cursor: pointer;
-  padding: 2px;
-  transition: all var(--transition-fast);
-  transform: scale(0.8);
+  font-size: 18px;
+  color: #ffffff;
+  opacity: 1;
 }
 
-.dots::after {
-  content: '';
-  display: inline-block;
-  width: 1em;
-  animation: dots 1s steps(3, end) infinite;
+.chat.incoming .msg-actions .copy-btn:hover,
+.chat.incoming .msg-actions .speak-btn:hover {
+  opacity: 0.85;
 }
 
-@keyframes dots {
-  0% { content: ''; }
-  33% { content: '.'; }
-  66% { content: '..'; }
-  100% { content: '...'; }
-}
-  
-
-@media (max-width: 767px) {
-  .welcomes {
-    font-size: var(--font-2xl);
-  }
+/* Light mode message actions */
+body.light-mode .chat.incoming .msg-actions .copy-btn,
+body.light-mode .chat.incoming .msg-actions .speak-btn {
+  color: var(--text-primary) !important;
 }
 
-@media (max-width: 480px) {
-  .welcomes {
-    font-size: var(--font-xl);
-  }
+/* ================= CODE BLOCKS ================= */
+.code-block {
+  position: relative;
+  background-color: #2d2d2d;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  margin: 10px 0;
+  overflow: hidden;
+  max-width: 100%;
 }
 
-/* Hide the menu button by default */
-.menu-toggle {
-  display: none;
-  background: none;
-  border: none;
-  font-size: var(--font-2xl);
-  cursor: pointer;
-  margin-right: var(--space-sm);
-  color: var(--text-primary);
+.code-block pre[class*="language-"] {
+  background: #2d2d2d;
+  margin: 0;
+  padding: 36px 14px 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Show menu button on mobile only */
-@media (max-width: 480px) {
-  .menu-toggle {
-    display: block;
-  }
-
-  .history-sidebar {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--secondary-bg);
-    transform: translateX(-100%);
-    transition: transform var(--transition-base);
-    z-index: 1000;
-    padding: var(--space-lg);
-    overflow-y: auto;
-  }
-
-  .history-sidebar.active {
-    transform: translateX(0);
-  }
-
-  .container {
-    width: 100%;
-    height: 100vh;
-    background: var(--primary-bg);
-  }
-  
-  .chatbot {
-    position: fixed;
-    left: -10px;
-    width: 100%;
-    border-radius: none;
-    box-shadow: none;
-  }
-  
-  #close-chatbot {
-    position: fixed;
-    left: 90%;
-  }
-  
-  .chat-input {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    width: 100%;
-    position: relative;
-    left: 20px;
-    padding: 0;
-    margin: 0;
-  }
-  
-  .chat-input textarea {
-    width: 100%;
-  }
-  
-  .chatbox .outgoing p {
-    position: relative;
-    left: 0;
-  }
+.code-block code {
+  background: transparent !important;
+  white-space: pre;
 }
 
-.close-sidebar-btn {
-  display: none;
-  background: none;
-  border: none;
-  font-size: var(--font-xl);
-  color: var(--text-primary);
+.code-block .code-copy-btn {
   position: absolute;
-  top: var(--space-sm);
-  right: var(--space-sm);
-  z-index: 100;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  background: rgba(32, 32, 32, 0.5);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
-@media (max-width: 479px) {
-  .close-sidebar-btn {
-    display: block;
-  }
+.code-block .code-copy-btn:hover {
+  background: rgba(0,0,0,0.7);
 }
 
-/* Sidebar toggle button */
-#sidebar-toggle {
-  display: none;
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  font-size: var(--font-2xl);
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  z-index: 1001;
+.bot-message-content {
+  width: 100%;
+  max-width: 100%;
 }
 
-/* Theme toggle (dark/light) */
-.theme-toggle {
-  position: absolute;
-  top: 16px;
-  right: 46px;
-  z-index: 1001;
+.bot-message-content .code-block {
+  width: 100%;
+  max-width: 100%;
+  margin: 10px 0;
+  overflow: hidden;
 }
 
-/* Show sidebar toggle only on small screens */
-@media (max-width: 480px) {
-  #sidebar-toggle {
-    display: block;
-  }
+.bot-message-content .code-block pre {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 44px 12px 12px;
 }
 
-body.light-mode #sidebar-toggle {
-  color: var(--accent-primary);
+.bot-message-content .code-block code {
   display: block;
+  white-space: pre;
 }
 
-.chatbot-toggler {
-  display: none;
-  height: 0%;
+.bot-message-content .code-block .code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+@media (max-width: 480px) {
+  .chatbox { 
+    padding-left: 30px; 
+    padding-right: 10px; 
+  }
+  .bot-message-content .code-block pre { 
+    padding: 44px 10px 10px; 
+  }
+}
+
+/* ================= HISTORY HEADER ================= */
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: var(--space-sm);
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background-color: var(--secondary-bg);
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
-/* Hide close button on desktop */
-
-/* Desktop view: sidebar always visible */
-@media (min-width: 481px) {
-  .history-sidebar {
-    transform: translateX(0) !important; /* force open */
-  }
-  /* Hide close button on desktop */
-  .history-sidebar #close-sidebar {
-    display: none !important;
-  }
+.new-chat-btn .material-symbols-outlined {
+  font-size: 20px;
 }
 
-
-.chatbot .material-symbols-outlined,
-.chatbot .material-icons {
-  color: #fff !important;
+body.light-mode .new-chat-btn {
+  background: #e5e5e5;
+  color: #000;
 }
 
+/* ================= TYPING INDICATOR ================= */
 .typing-indicator span {
   width: 6px;
   height: 6px;
@@ -1056,389 +1035,74 @@ body.light-mode #sidebar-toggle {
   20% { opacity: 1; }
   100% { opacity: 0.2; }
 }
-/* mic animation */
-#mic-btn.listening {
-  color: red;
-  animation: pulse 1s infinite;
+
+/* ================= DOTS ANIMATION ================= */
+.dots::after {
+  content: '';
+  display: inline-block;
+  width: 1em;
+  animation: dots 1s steps(3, end) infinite;
 }
 
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.2); }
-  100% { transform: scale(1); }
+@keyframes dots {
+  0% { content: ''; }
+  33% { content: '.'; }
+  66% { content: '..'; }
+  100% { content: '...'; }
 }
 
-
-
-.chatbox .incoming p{background:var(--secondary-bg)!important;border:none!important;}
-.chatbox .outgoing p{background:var(--secondary-bg)!important;border:1px solid rgba(255,255,255,0.14)!important;left:auto!important;margin-left:auto!important;}
-/* ===== Incoming message actions (copy + speaker) ===== */
-
-.chat.incoming .bot-message-container{
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-/* Buttons row: copy (left) + speaker (right) */
-.chat.incoming .msg-actions{
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-
-  /* Desktop position */
-  
-}
-
-
-
-/* Button styles */
-.chat.incoming .msg-actions .copy-btn,
-.chat.incoming .msg-actions .speak-btn{
-  position: static;
-  background: none;
-  border: none;
-  padding: 0;
-
-  font-size: 18px;
-  cursor: pointer;
-  color: #ffffff;
-  opacity: 1;
-}
-
-.chat.incoming .msg-actions .copy-btn:hover,
-.chat.incoming .msg-actions .speak-btn:hover{
-  opacity: 0.85;
-}
-
-/* ===== Bot message layout: prevent overlap ===== */
-.chat.incoming .bot-message-container{
-  position: relative;
-  max-width: 80%;
-}
-
-/* Reserve space at bottom so buttons never overlap text */
-.chat.incoming .bot-message-container p{
-  padding-bottom: 26px; /* space for buttons */
-}
-
-/* Buttons pinned bottom-right inside bot container */
-.chat.incoming .msg-actions{
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-/* Buttons look */
-.chat.incoming .msg-actions .copy-btn,
-.chat.incoming .msg-actions .speak-btn{
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: 18px;
-  color: #ffffff;
-  opacity: 1;
-}
-
-/* Hover */
-.chat.incoming .msg-actions .copy-btn:hover,
-.chat.incoming .msg-actions .speak-btn:hover{
-  opacity: 0.85;
-}
-
-/* Mobile tweak */
-@media (max-width: 425px){
-  .chat.incoming .bot-message-container p{
-    padding-bottom: 30px;
-  }
-  .chat.incoming .msg-actions{
-    bottom: 2px;
+/* ================= RESPONSIVE WELCOME TEXT ================= */
+@media (max-width: 780px) {
+  .welcomes {
+    font-size: var(--font-2xl);
   }
 }
 
-/* ===== MOBILE: push header down (prevent status bar overlap) ===== */
-@media (max-width: 480px){
-
-  /* header ko thoda niche */
-  .chatbot header{
-    padding-top: 32px !important;   /* increase/decrease as needed */
+@media (max-width: 480px) {
+  .welcomes {
+    font-size: var(--font-xl);
   }
+}
 
-  /* icons + title ko bhi thoda niche */
-  .chatbot header h2{
-    margin-top: 6px !important;
-    top: 36px !important; 
+/* ================= CLEANUP ================= */
+.chatbot-toggler {
+  display: none !important;
+}
+
+@media (max-width: 480px) {
+  /* Theme toggle - positioned right next to sidebar toggle */
+  #mode-toggle {
+    left: 64px !important; /* 16px (original) + 44px (button width) + 4px (gap) */
+    right: auto !important;
+    top: 16px !important;
   }
   
-
-  #sidebar-toggle{
-    top: 36px !important;          /* push buttons down */
+  /* Sidebar toggle stays on left */
+  #sidebar-toggle {
+    left: 16px !important;
+    right: auto !important;
+    top: 16px !important;
   }
-
-  /* close btn little left (as you wanted earlier) */
-  #close-chatbot{
-    right: 14px !important;
-    top: 40px !important;  
+  
+  /* Close button stays on far right */
+  .chatbot header .close-btn {
+    right: 16px !important;
+    top: 16px !important;
+    left: auto !important;
   }
-  #mode-toggle
-  {
-    top: 32px !important;
+}@media (max-width: 480px) {
+  /* Theme toggle - positioned right next to sidebar toggle */
+  #mode-toggle {
+    left: 64px !important; /* 16px (original) + 44px (button width) + 4px (gap) */
+    right: auto !important;
+    top: 16px !important;
   }
-}
-/* Wrapper (NO background here) */
-.code-block {
-  position: relative;
-  background-color: #2d2d2d;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  margin: 10px 0;
-  overflow: hidden;
-}
-
-/* SINGLE grey background (Prism) */
-.code-block pre[class*="language-"] {
-  background: #2d2d2d; /* one single grey */
-  margin: 0;
-  padding: 36px 14px 14px; /* top space for copy btn */
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Code text */
-.code-block code {
-  background: transparent !important;
-  white-space: pre;
-}
-.code-block .code-copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 5;
-
-  background: rgba(32, 32, 32, 0.5);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.code-block .code-copy-btn:hover {
-  background: rgba(0,0,0,0.7);
-}
-
-
-/* 1) Stop horizontal cut/overflow everywhere */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html, body {
-  width: 100%;
-  overflow-x: hidden;
-}
-
-/* 2) Make incoming message container never exceed screen */
-.chatbox,
-.chatbox .chat {
-  max-width: 100%;
-}
-
-.chat.incoming .bot-message-container {
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden; /* prevents weird side spill */
-}
-
-/* Your bot message inner wrapper */
-.bot-message-content {
-  width: 100%;
-  max-width: 100%;
-}
-
-/* 3) Code block: full width, no left/right cutting */
-.bot-message-content .code-block {
-  width: 100%;
-  max-width: 100%;
-  margin: 10px 0;        /* no negative margins */
-  border-radius: 12px;
-  overflow: hidden;      /* keeps rounded corners */
-}
-
-/* 4) Make PRE scroll horizontally instead of pushing layout */
-.bot-message-content .code-block pre {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding: 44px 12px 12px; /* IMPORTANT: top padding so first lines don't hide under button */
-}
-
-/* Keep code readable */
-.bot-message-content .code-block code {
-  display: block;
-  white-space: pre; /* keeps formatting */
-}
-
-/* 5) Copy button fixed top-right, never clips */
-.bot-message-content .code-block .code-copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-}
-
-/* 6) Small screens extra padding so nothing touches edges */
-@media (max-width: 480px) {
-  .chatbox { padding-left: 30px; padding-right: 10px; }
-  .bot-message-content .code-block pre { padding: 44px 10px 10px; }
-}
-
-
-.history-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.history-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.new-chat-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-      background-color: var(--secondary-bg);
-  border: none;
-  color: #fff;
-
-  padding: 8px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-
-.new-chat-btn .material-symbols-outlined {
-  font-size: 20px;
-}
-
-/* Light mode */
-body.light-mode .new-chat-btn {
-  background: #e5e5e5;
-  color: #000;
-}
-/* DESKTOP: sidebar always visible */
-@media (min-width: 481px) {
-  .history-sidebar {
-    display: block !important;
-    transform: none !important;
+  
+  /* Sidebar toggle stays on left */
+  #sidebar-toggle {
+    left: 16px !important;
+    right: auto !important;
+    top: 16px !important;
   }
-  .chatbot {
-    width: calc(100% - 250px);
-  }
-}
-@media (max-width: 480px) {
-  .history-sidebar {
-    display: block !important;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-  }
-  .history-sidebar.active {
-    transform: translateX(0);
-  }
-}
-/* =========================================================
-   SIDEBAR + WELCOME FIX (FINAL)
-   - Sidebar hidden on welcome
-   - After chat starts (body.chat-started):
-       Desktop: sidebar always visible
-       Mobile: sidebar hidden unless .active
-   ========================================================= */
-
-/* 1) Default: sidebar hidden always */
-.history-sidebar {
-  display: none !important;
-}
-
-/* 2) Welcome screen state: keep sidebar hidden */
-body:not(.chat-started) .history-sidebar {
-  display: none !important;
-  transform: translateX(-100%) !important;
-}
-
-/* 3) Desktop: show sidebar ONLY after chat-started */
-/* DESKTOP: sidebar visible ONLY after chat started */
-@media (min-width: 481px) {
-  .history-sidebar {
-    display: none !important;
-    transform: none !important;
-  }
-
-  body.chat-started .history-sidebar {
-    display: block !important;
-  }
-
-  /* chatbot takes full width before chat started */
-  .chatbot {
-    width: 100%;
-  }
-
-  /* chatbot shifts when chat started */
-  body.chat-started .chatbot {
-    width: calc(100% - 250px);
-  }
-}
-
-
-/* 4) Mobile: show sidebar container after chat-started, but keep it CLOSED by default */
-@media (max-width: 480px) {
-  body.chat-started .history-sidebar {
-    display: block !important;
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    width: 85% !important;
-    height: 100vh !important;
-    transform: translateX(-100%) !important;
-    transition: transform 0.3s ease !important;
-    z-index: 1001 !important;
-  }
-
-  /* OPEN on mobile only when .active */
-  body.chat-started .history-sidebar.active {
-    transform: translateX(0) !important;
-  }
-
-  /* Mobile chatbot full width */
-  body.chat-started .chatbot {
-    width: 100% !important;
-    left: 0 !important;
-    max-width: 100% !important;
-  }
-}
-
-/* 5) REMOVE old show-history behavior (neutralize) */
-body.show-history .history-sidebar {
-  display: none !important;
-  transform: translateX(-100%) !important;
-}
-
-body.show-history .chatbot {
-  width: 100% !important;
+  
 }
