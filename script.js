@@ -850,4 +850,68 @@ function handleResize() {
     }
 }
 
+// ================= FIX SIDEBAR CLOSE BUTTON =================
+function fixSidebarCloseButton() {
+  const closeBtn = document.getElementById("close-sidebar");
+  const sidebar = document.querySelector(".history-sidebar");
+  
+  if (!closeBtn) {
+    console.error("❌ Close sidebar button not found!");
+    return;
+  }
+  
+  if (!sidebar) {
+    console.error("❌ History sidebar not found!");
+    return;
+  }
+  
+  console.log("✅ Found sidebar close button:", closeBtn);
+  
+  // Remove any existing event listeners by cloning
+  const newCloseBtn = closeBtn.cloneNode(true);
+  closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+  
+  // Add click event listener
+  newCloseBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("🟡 Closing sidebar...");
+    
+    // Remove active class
+    sidebar.classList.remove("active");
+    
+    // On mobile, also hide with transform
+    if (window.innerWidth <= 480) {
+      sidebar.style.transform = "translateX(-100%)";
+    }
+    
+    console.log("✅ Sidebar closed");
+  });
+  
+  // Also add event listener to the original sidebar reference
+  sidebar.addEventListener("click", function(e) {
+    if (e.target.id === "close-sidebar" || 
+        e.target.closest("#close-sidebar")) {
+      e.stopPropagation();
+      sidebar.classList.remove("active");
+      if (window.innerWidth <= 480) {
+        sidebar.style.transform = "translateX(-100%)";
+      }
+    }
+  });
+}
+
+// Run fix when page loads
+document.addEventListener("DOMContentLoaded", function() {
+  console.log("🚀 DOM loaded, fixing sidebar close button...");
+  setTimeout(fixSidebarCloseButton, 500); // Delay to ensure everything is loaded
+});
+
+// Also run fix when chat starts (if sidebar is dynamically shown)
+document.addEventListener("click", function(e) {
+  if (e.target.closest(".start-chat-btn")) {
+    setTimeout(fixSidebarCloseButton, 1000);
+  }
+});
+
 // ================= END OF CODE =================
