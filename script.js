@@ -17,6 +17,7 @@ const modeToggle = document.getElementById("mode-toggle");
 const modeIcon = modeToggle?.querySelector(".material-symbols-outlined");
 const micBtn = document.getElementById("mic-btn");
 
+
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
 const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
@@ -31,37 +32,40 @@ let voices = [];
 document.addEventListener("DOMContentLoaded", initializeApp);
 
 async function initializeApp() {
-    console.log("🚀 Initializing app...");
-    
-    // Initialize UI state
-    initUIState();
-    
-    // Initialize user
-    const userId = getUserId();
-    console.log("👤 User ID:", userId);
-    
-    // Initialize theme
-    initTheme();
-    
-    // Initialize speech synthesis
-    initSpeechSynthesis();
-    
-    // Initialize microphone
-    initMicrophone();
-    
-    // Initialize event listeners
-    initEventListeners();
-    
-    // Test backend connection
-    await testBackendConnection();
-    
-    // Load existing chat if any
-    if (activeChatId) {
-        await loadChatFromServer(activeChatId);
+  console.log("🚀 Initializing app...");
+
+  // 1) Always show welcome first (no sidebar, no chat-started)
+  initUIState();
+
+  // 2) User
+  const userId = getUserId();
+  console.log("👤 User ID:", userId);
+
+  // 3) Theme + speech + mic
+  initTheme();
+  initSpeechSynthesis();
+  initMicrophone();
+
+  // 4) Events
+  initEventListeners();
+
+  // 5) Backend check (don't block UI)
+  testBackendConnection().catch(console.error);
+
+  // 6) OPTIONAL: Preload last chat in background (welcome stays)
+  if (activeChatId && chatbox) {
+    try {
+      await loadChatFromServer(activeChatId);
+      // IMPORTANT: do NOT add chat-started here
+      // welcome screen remains visible until user clicks Start Chat
+    } catch (e) {
+      console.warn("⚠️ Could not preload last chat:", e);
     }
-    
-    console.log("✅ App initialized");
+  }
+
+  console.log("✅ App initialized");
 }
+
 
 // ================= CORE FUNCTIONS =================
 
@@ -75,31 +79,21 @@ function getUserId() {
     return userId;
 }
 
-// 2. UI STATE MANAGEMENT
 function initUIState() {
-    // Start with welcome screen
-    document.body.classList.remove("chat-started", "show-chatbot");
-    if (welcome) welcome.style.display = "block";
-    if (container) container.style.display = "none";
-    if (historySidebar) historySidebar.classList.remove("active");
-    
-    // Handle responsive sidebar
-    if (window.innerWidth > 480) {
-        // Desktop: sidebar always visible when chat started
-        if (activeChatId) {
-            document.body.classList.add("chat-started");
-            if (historySidebar) {
-                historySidebar.style.display = "block";
-                historySidebar.style.transform = "translateX(0)";
-            }
-        }
-    } else {
-        // Mobile: sidebar hidden initially
-        if (historySidebar) {
-            historySidebar.style.display = "none";
-        }
-    }
+  // ALWAYS start on welcome screen
+  document.body.classList.remove("chat-started", "show-chatbot", "show-history");
+
+  if (welcome) welcome.style.display = "block";
+  if (container) container.style.display = "none";
+
+  // Sidebar MUST be hidden on welcome (remove inline overrides too)
+  if (historySidebar) {
+    historySidebar.classList.remove("active");
+    historySidebar.style.display = "";     // remove forced "block/none"
+    historySidebar.style.transform = "";   // remove forced translate
+  }
 }
+
 
 // 3. THEME MANAGEMENT
 function initTheme() {
