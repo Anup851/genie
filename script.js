@@ -325,7 +325,11 @@ async function loadSessionsSidebar() {
         historyList.innerHTML = "";
         
         if (sessions.length === 0) {
-            historyList.innerHTML = "<li class='no-chats'>No chats yet</li>";
+            // Create styled "no chats" message
+            const noChatsLi = document.createElement("li");
+            noChatsLi.className = "no-chats";
+            noChatsLi.textContent = "No chats yet";
+            historyList.appendChild(noChatsLi);
             return;
         }
         
@@ -355,7 +359,12 @@ async function loadSessionsSidebar() {
         });
     } catch (error) {
         console.error("❌ Error loading sessions:", error);
-        historyList.innerHTML = "<li class='error'>Failed to load chats</li>";
+        // Create styled error message
+        const errorLi = document.createElement("li");
+        errorLi.className = "error";
+        errorLi.textContent = "Failed to load chats";
+        historyList.innerHTML = "";
+        historyList.appendChild(errorLi);
     }
 }
 
@@ -390,7 +399,17 @@ async function loadChatFromServer(chatId) {
         chatbox.scrollTo(0, chatbox.scrollHeight);
     } catch (error) {
         console.error("❌ Error loading chat:", error);
-        chatbox.innerHTML = "<li class='error'>Failed to load chat</li>";
+        // Create properly styled error message
+        const errorLi = document.createElement("li");
+        errorLi.className = "chat incoming error";
+        errorLi.innerHTML = `
+            <div class="bot-message-container">
+                <p>Failed to load chat. Please check your connection and try again.</p>
+            </div>
+        `;
+        chatbox.innerHTML = "";
+        chatbox.appendChild(errorLi);
+        chatbox.scrollTo(0, chatbox.scrollHeight);
     }
 }
 
