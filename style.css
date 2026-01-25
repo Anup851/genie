@@ -556,24 +556,26 @@ body.show-history .chatbot {
     left: auto;
   }
 
-/* History sidebar */
-.history-sidebar {
-  width: 85% !important;
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100%;
-  transform: translateX(-100%);
-  transition: transform 0.3s ease;
-  z-index: 1001;
-  display: block !important;
-}
+  /* History sidebar for mobile */
+  .history-sidebar {
+    width: 85% !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1001;
+    display: block !important;
+  }
 
-/* OPEN when JS adds .active */
-.history-sidebar.active {
-  transform: translateX(0);
-}
+  body.show-history .history-sidebar {
+    transform: translateX(0);
+  }
 
+  body.show-history .chatbot {
+    transform: translateX(0);
+  }
 
   /* Ensure the background color is consistent */
   .chatbot,
@@ -1172,7 +1174,10 @@ body.light-mode #sidebar-toggle {
     margin-top: 6px !important;
     top: 36px !important; 
   }
-  
+  .history-sidebar #close-sidebar
+  {
+    top: 40px !important; 
+  }
 
   #sidebar-toggle{
     top: 36px !important;          /* push buttons down */
