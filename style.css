@@ -1190,3 +1190,116 @@ body.light-mode #sidebar-toggle {
     top: 32px !important;
   }
 }
+/* Wrapper (NO background here) */
+.code-block {
+  position: relative;
+  background-color: #2d2d2d;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  margin: 10px 0;
+  overflow: hidden;
+}
+
+/* SINGLE grey background (Prism) */
+.code-block pre[class*="language-"] {
+  background: #2d2d2d; /* one single grey */
+  margin: 0;
+  padding: 36px 14px 14px; /* top space for copy btn */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Code text */
+.code-block code {
+  background: transparent !important;
+  white-space: pre;
+}
+.code-block .code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+
+  background: rgba(32, 32, 32, 0.5);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.code-block .code-copy-btn:hover {
+  background: rgba(0,0,0,0.7);
+}
+
+
+/* 1) Stop horizontal cut/overflow everywhere */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* 2) Make incoming message container never exceed screen */
+.chatbox,
+.chatbox .chat {
+  max-width: 100%;
+}
+
+.chat.incoming .bot-message-container {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden; /* prevents weird side spill */
+}
+
+/* Your bot message inner wrapper */
+.bot-message-content {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* 3) Code block: full width, no left/right cutting */
+.bot-message-content .code-block {
+  width: 100%;
+  max-width: 100%;
+  margin: 10px 0;        /* no negative margins */
+  border-radius: 12px;
+  overflow: hidden;      /* keeps rounded corners */
+}
+
+/* 4) Make PRE scroll horizontally instead of pushing layout */
+.bot-message-content .code-block pre {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 44px 12px 12px; /* IMPORTANT: top padding so first lines don't hide under button */
+}
+
+/* Keep code readable */
+.bot-message-content .code-block code {
+  display: block;
+  white-space: pre; /* keeps formatting */
+}
+
+/* 5) Copy button fixed top-right, never clips */
+.bot-message-content .code-block .code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+/* 6) Small screens extra padding so nothing touches edges */
+@media (max-width: 480px) {
+  .chatbox { padding-left: 30px; padding-right: 10px; }
+  .bot-message-content .code-block pre { padding: 44px 10px 10px; }
+}
