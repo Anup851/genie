@@ -285,8 +285,17 @@ messageElement.innerHTML = "Thinking<span class='dots'></span>";
       .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
       .replace(/\n/g, "<br>");
 
-    messageElement.innerHTML = `<div class="bot-message-content">${finalText}</div>`;
+    const htmlWithBlocks = parseFencedBlocks(responseText); // use raw text so ``` blocks are detected
+messageElement.innerHTML = `<div class="bot-message-content">${htmlWithBlocks}</div>`;
+
+// Prism highlight (if you added prism in HTML)
+if (window.Prism) Prism.highlightAllUnder(messageElement);
+
+// enable copy only inside code blocks
+enableCopyButtons(messageElement);
+
 ensureMsgActions(messageElement.closest(".bot-message-container"));
+
 
 
 
@@ -615,5 +624,51 @@ function ensureMsgActions(container) {
   `;
 
   container.appendChild(actions);
+}
+
+function escapeHtml(str) {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function parseFencedBlocks(text) {
+  const regex = /```(\w+)?\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let html = "";
+
+  for (const match of text.matchAll(regex)) {
+    const [full, lang, code] = match;
+    const start = match.index;
+    const end = start + full.length;
+html += escapeHtml(text.slice(lastIndex, start)).replaceAll("\n", "<br>");
+
+const safeLang = (lang || "text").toLowerCase();
+
+html += `
+  <div class="code-block">
+    <button class="code-copy-btn" type="button">Copy</button>
+    <pre class="language-${safeLang}"><code class="language-${safeLang}">${escapeHtml(code)}</code></pre>
+  </div>
+`;
+
+lastIndex = end;
+
+  }
+
+  html += escapeHtml(text.slice(lastIndex)).replaceAll("\n", "<br>");
+  return html;
+}
+
+function enableCopyButtons(container) {
+  container.querySelectorAll(".code-copy-btn").forEach(btn => {
+    btn.onclick = () => {
+      const code = btn.nextElementSibling.innerText;
+      navigator.clipboard.writeText(code);
+      btn.innerText = "Copied!";
+      setTimeout(() => (btn.innerText = "Copy"), 1000);
+    };
+  });
 }
 
