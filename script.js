@@ -518,53 +518,57 @@ if (sidebarToggle && closeSidebarBtn) {
   });
 }
 
-// Welcome screen and container management
+// ✅ Welcome screen and container management (FIXED)
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".container");
   const welcome = document.querySelector(".welcome");
   const startChatBtn = document.querySelector(".start-chat-btn");
+
+  // initial state
   if (welcome && container) {
     welcome.style.display = "block";
     container.style.display = "none";
   }
+
+  // ✅ IMPORTANT: do NOT auto-open sidebar
   historySidebar.classList.remove("active");
   document.body.classList.remove("show-history");
+
   if (startChatBtn) {
-    startChatBtn.addEventListener("click", () => {
+    startChatBtn.addEventListener("click", async () => {
       if (welcome && container) {
         welcome.style.display = "none";
         container.style.display = "block";
       }
-      historySidebar.classList.add("active");
-      document.body.classList.add("show-history");
+
+      // ✅ do NOT force open sidebar here
+      // historySidebar.classList.add("active");
+      // document.body.classList.add("show-history");
+
+      // ✅ load chats + ensure active chat
+      await ensureActiveChat();
     });
   }
+
   if (closeBtn && container && welcome) {
     closeBtn.addEventListener("click", () => {
       container.style.display = "none";
       welcome.style.display = "block";
+
       historySidebar.classList.remove("active");
       document.body.classList.remove("show-history");
     });
   }
 });
 
-// Adjust sidebar on window resize
+// ✅ Adjust sidebar on window resize (FIXED: never auto-open)
 window.addEventListener("resize", () => {
   if (window.innerWidth <= 480) {
     historySidebar.classList.remove("active");
     document.body.classList.remove("show-history");
-  } else {
-    const container = document.querySelector(".container");
-    if (container && container.style.display === "block") {
-      historySidebar.classList.add("active");
-      document.body.classList.add("show-history");
-    } else {
-      historySidebar.classList.remove("active");
-      document.body.classList.remove("show-history");
-    }
   }
 });
+
 
 // Disable zoom
 window.addEventListener("wheel", function(e) { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
