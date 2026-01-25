@@ -40,17 +40,39 @@
   </div>
 
   <!-- Sidebar for chat history -->
-  <div class="history-sidebar">
-    <h3>Search History</h3>
-    <button id="close-sidebar" class="material-symbols-outlined close-sidebar-btn">close</button>
-    <button class="delete-all-btn">
-      <span class="material-icons">delete_forever</span>
-      Delete All
-    </button>
-    <ul class="history-list">
-      <!-- This will dynamically show search history items -->
-    </ul>
+<div class="history-sidebar">
+
+  <!-- HEADER -->
+  <div class="history-header">
+    
+    <div class="history-actions">
+      <!-- NEW CHAT -->
+      <button id="new-chat-btn" class="new-chat-btn">
+  <span class="material-symbols-outlined">add</span>
+  <span class="new-chat-text">New chat</span>
+</button>
+
+
+      <!-- CLOSE SIDEBAR -->
+      <button id="a" class="material-symbols-outlined close-sidebar-btn">
+        close
+      </button>
+    </div>
   </div>
+
+  <!-- DELETE ALL -->
+  <button class="delete-all-btn">
+    <span class="material-icons">delete_forever</span>
+    Delete All
+  </button>
+
+  <!-- CHAT LIST -->
+  <ul class="history-list">
+    <!-- sessions will render here -->
+  </ul>
+
+</div>
+
 
   <div class="container">
     <button class="chatbot-toggler"></button>
