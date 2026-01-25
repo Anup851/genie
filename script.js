@@ -9,15 +9,6 @@ const deleteAllBtn = document.querySelector(".delete-all-btn");
 const welcomeText = document.querySelector(".welcome");
 const sidebarToggle = document.getElementById("sidebar-toggle");
 const closeSidebarBtn = document.getElementById("close-sidebar");
-const newChatBtn = document.getElementById("new-chat-btn");
-
-if (newChatBtn) {
-  newChatBtn.addEventListener("click", async () => {
-    await createNewChat();
-  });
-}
-
-
 
 // ===== APP: Responsive safe-top (prevents status bar overlap) =====
 function applySafeTop() {
@@ -69,8 +60,6 @@ document.addEventListener('DOMContentLoaded', function() {
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
 let conversationMemory = [];
-let activeChatId = localStorage.getItem("genie_activeChatId") || null;
-const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
 
 // Timezone data
 const timeZones = {
@@ -126,131 +115,12 @@ function createChatLi(message, className) {
   return chatLi;
 }
 
-async function ensureActiveChat() {
-  const userId = getUserId();
-
-  // If no active chat, create one on server
-  if (!activeChatId) {
-    const resp = await fetch(`${BACKEND_URL}/chat/new`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, title: "New chat" })
-    });
-    const data = await resp.json();
-    activeChatId = data.chatId;
-    localStorage.setItem("genie_activeChatId", activeChatId);
-  }
-
-  await loadSessionsSidebar();
-  await loadChatFromServer(activeChatId);
-}
-
-async function loadSessionsSidebar() {
-  const userId = getUserId();
-  const resp = await fetch(`${BACKEND_URL}/chats/${userId}`);
-  const data = await resp.json();
-
-  historyList.innerHTML = "";
-
-  const sessions = data.sessions || [];
-  if (!sessions.length) {
-    historyList.innerHTML = "<li>No chats yet</li>";
-    return;
-  }
-
-  sessions.forEach(s => {
-    const li = document.createElement("li");
-    li.className = "history-item";
-    if (s.chatId === activeChatId) li.classList.add("active");
-
-    li.innerHTML = `
-      <span class="history-title">${escapeHtml(s.title || "New chat")}</span>
-      <span class="material-icons delete-icon">delete</span>
-    `;
-
-    // Open chat on click
-    li.addEventListener("click", (e) => {
-      if (e.target.classList.contains("delete-icon")) return;
-      openSession(s.chatId);
-    });
-
-    // Delete chat
-    li.querySelector(".delete-icon").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await deleteSession(s.chatId);
-    });
-
-    historyList.appendChild(li);
-  });
-}
-
-async function openSession(chatId) {
-  activeChatId = chatId;
-  localStorage.setItem("genie_activeChatId", activeChatId);
-  await loadChatFromServer(chatId);
-  await loadSessionsSidebar();
-}
-
-async function loadChatFromServer(chatId) {
-  const userId = getUserId();
-  const resp = await fetch(`${BACKEND_URL}/chat/${userId}/${chatId}`);
-  const data = await resp.json();
-
-  chatbox.innerHTML = "";
-
-  (data.messages || []).forEach(m => {
-    if (m.role === "user") {
-      chatbox.appendChild(createChatLi(m.message, "outgoing"));
-    } else {
-      const li = createChatLi("", "incoming");
-      const p = li.querySelector("p");
-
-      const htmlWithBlocks = parseFencedBlocks(m.message);
-      p.innerHTML = `<div class="bot-message-content">${htmlWithBlocks}</div>`;
-
-      if (window.Prism) Prism.highlightAllUnder(p);
-      enableCopyButtons(p);
-
-      ensureMsgActions(li.querySelector(".bot-message-container"));
-      chatbox.appendChild(li);
-    }
-  });
-
-  chatbox.scrollTo(0, chatbox.scrollHeight);
-}
-
-async function createNewChat() {
-  const userId = getUserId();
-  const resp = await fetch(`${BACKEND_URL}/chat/new`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, title: "New chat" })
-  });
-  const data = await resp.json();
-  await openSession(data.chatId);
-}
-
-async function deleteSession(chatId) {
-  const userId = getUserId();
-  await fetch(`${BACKEND_URL}/chat/${userId}/${chatId}`, { method: "DELETE" });
-
-  // If deleted current chat, create a new one
-  if (chatId === activeChatId) {
-    activeChatId = null;
-    localStorage.removeItem("genie_activeChatId");
-    await ensureActiveChat();
-    return;
-  }
-
-  await loadSessionsSidebar();
-}
 
 // Save search history
 const saveSearchHistory = (message) => {
   searchHistory.push(message);
   localStorage.setItem("searchHistory", JSON.stringify(searchHistory));
-  loadSessionsSidebar();
-
+  updateHistorySidebar();
 };
 
 // Update history sidebar
@@ -279,20 +149,11 @@ const updateHistorySidebar = () => {
 };
 
 // Delete history item
-deleteAllBtn.addEventListener("click", async () => {
-  const userId = getUserId();
-
-  // delete all sessions from server
-  await fetch(`${BACKEND_URL}/chats/${userId}`, { method: "DELETE" });
-
-  // reset active chat
-  activeChatId = null;
-  localStorage.removeItem("genie_activeChatId");
-
-  // create a new empty chat + reload sidebar
-  await ensureActiveChat();
-});
-
+const deleteHistoryItem = (index) => {
+  searchHistory.splice(index, 1);
+  localStorage.setItem("searchHistory", JSON.stringify(searchHistory));
+  updateHistorySidebar();
+};
 
 const handleChat = () => {
   const userMessage = chatInput.value.trim();
@@ -321,7 +182,6 @@ async function fetchWeather(city) {
     return null;
   }
 }
-
 
 // Fetch real-time time in a timezone
 function getTimeInZone(timeZone) {
@@ -373,8 +233,7 @@ messageElement.innerHTML = "Thinking<span class='dots'></span>";
 
     conversationMemory.push({ role: "user", text: userMessage });
     conversationMemory.push({ role: "assistant", text: weatherReply.replace(/<[^>]*>/g, "") });
-    await loadSessionsSidebar();
-
+    saveSearchHistory(userMessage);
     return;
   }
 
@@ -402,11 +261,9 @@ messageElement.innerHTML = "Thinking<span class='dots'></span>";
         "Accept": "application/json"
       },
       body: JSON.stringify({
-  userId: userId,
-  chatId: activeChatId,            // ✅ ADD THIS
-  message: userMessage.trim()
-}),
-
+        userId: userId, // Use persistent user ID
+        message: userMessage.trim()  // ✅ CORRECT - property name is "message"
+      }),
       signal: controller.signal
     });
 
@@ -445,8 +302,7 @@ ensureMsgActions(messageElement.closest(".bot-message-container"));
     // Save clean text to memory
     const plainText = responseText.replace(/<[^>]*>/g, "");
     conversationMemory.push({ role: "assistant", text: plainText });
-    await loadSessionsSidebar();
-
+    saveSearchHistory(userMessage);
 
   } catch (error) {
     console.error("❌ Backend error:", error);
@@ -464,66 +320,25 @@ chatInput.addEventListener("keydown", (e) => {
     handleChat();
   }
 });
-
-// ✅ FIX: chatbot toggler should NOT control sidebar
 chatbotToggler.addEventListener("click", () => {
   document.body.classList.toggle("show-chatbot");
-  // ❌ removed: document.body.classList.toggle("show-history");
+  document.body.classList.toggle("show-history");
 });
-
-// ✅ FIX: close button should also close sidebar completely
 closeBtn.addEventListener("click", () => {
   document.body.classList.remove("show-chatbot");
-  historySidebar.classList.remove("active");   // ✅ added
   document.body.classList.remove("show-history");
 });
-
-loadSessionsSidebar();
-
-
-
-document.addEventListener("DOMContentLoaded", async () => {
-  const container = document.querySelector(".container");
-  const welcome = document.querySelector(".welcome");
-  const startChatBtn = document.querySelector(".start-chat-btn");
-
-  // start state
-  if (welcome && container) {
-    welcome.style.display = "block";
-    container.style.display = "none";
-  }
-
-  // sidebar closed by default (mobile)
-  historySidebar.classList.remove("active");
-
-  // open chat
-  startChatBtn?.addEventListener("click", async () => {
-    if (welcome && container) {
-      welcome.style.display = "none";
-      container.style.display = "block";
-    }
-
-    document.body.classList.add("show-chatbot");
-
-    // don't auto open sidebar
-    historySidebar.classList.remove("active");
-
-    await ensureActiveChat();
-  });
-
-  // close chat button
-  closeBtn?.addEventListener("click", () => {
-    document.body.classList.remove("show-chatbot");
-    historySidebar.classList.remove("active");
-
-    if (welcome && container) {
-      container.style.display = "none";
-      welcome.style.display = "block";
-    }
-  });
+updateHistorySidebar();
+deleteAllBtn.addEventListener("click", () => {
+  searchHistory = [];
+  localStorage.setItem("searchHistory", JSON.stringify(searchHistory));
+  updateHistorySidebar();
 });
-
-
+const startChatBtn = document.querySelector(".start-chat-btn");
+startChatBtn.addEventListener("click", () => {
+  document.body.classList.add("show-chatbot");
+  document.body.classList.add("show-history");
+});
 
 // Dark/light mode toggle
 const toggleButton = document.getElementById("mode-toggle");
@@ -537,81 +352,74 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 
+// History sidebar functionality
 if (sidebarToggle && closeSidebarBtn) {
-  sidebarToggle.addEventListener("click", (e) => {
-    e.stopPropagation();
+  sidebarToggle.addEventListener("click", () => {
     historySidebar.classList.toggle("active");
+    document.body.classList.toggle("show-history");
   });
-
   closeSidebarBtn.addEventListener("click", () => {
     historySidebar.classList.remove("active");
+    document.body.classList.remove("show-history");
   });
-
   document.addEventListener("click", (event) => {
-    if (
-      window.innerWidth <= 480 &&
-      historySidebar.classList.contains("active") &&
-      !historySidebar.contains(event.target) &&
-      event.target !== sidebarToggle
-    ) {
+    if (window.innerWidth <= 480 && 
+        historySidebar.classList.contains("active") && 
+        !historySidebar.contains(event.target) && 
+        event.target !== sidebarToggle) {
       historySidebar.classList.remove("active");
+      document.body.classList.remove("show-history");
     }
   });
 }
 
-
-
-// ✅ Welcome screen and container management (FIXED)
+// Welcome screen and container management
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".container");
   const welcome = document.querySelector(".welcome");
   const startChatBtn = document.querySelector(".start-chat-btn");
-
-  // initial state
   if (welcome && container) {
     welcome.style.display = "block";
     container.style.display = "none";
   }
-
-  // ✅ IMPORTANT: do NOT auto-open sidebar
   historySidebar.classList.remove("active");
-  
-
+  document.body.classList.remove("show-history");
   if (startChatBtn) {
-    startChatBtn.addEventListener("click", async () => {
+    startChatBtn.addEventListener("click", () => {
       if (welcome && container) {
         welcome.style.display = "none";
         container.style.display = "block";
       }
-
-      // ✅ do NOT force open sidebar here
-      // historySidebar.classList.add("active");
-      // document.body.classList.add("show-history");
-
-      // ✅ load chats + ensure active chat
-      await ensureActiveChat();
+      historySidebar.classList.add("active");
+      document.body.classList.add("show-history");
     });
   }
-
   if (closeBtn && container && welcome) {
     closeBtn.addEventListener("click", () => {
       container.style.display = "none";
       welcome.style.display = "block";
-
       historySidebar.classList.remove("active");
       document.body.classList.remove("show-history");
     });
   }
 });
 
-// ✅ Adjust sidebar on window resize (FIXED: never auto-open)
+// Adjust sidebar on window resize
 window.addEventListener("resize", () => {
   if (window.innerWidth <= 480) {
     historySidebar.classList.remove("active");
     document.body.classList.remove("show-history");
+  } else {
+    const container = document.querySelector(".container");
+    if (container && container.style.display === "block") {
+      historySidebar.classList.add("active");
+      document.body.classList.add("show-history");
+    } else {
+      historySidebar.classList.remove("active");
+      document.body.classList.remove("show-history");
+    }
   }
 });
-
 
 // Disable zoom
 window.addEventListener("wheel", function(e) { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
@@ -702,11 +510,9 @@ async function testBackendConnection() {
 }
 
 // Test connection on page load
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
   testBackendConnection();
-  
 });
-
 
 
 function showTypingIndicator() {
