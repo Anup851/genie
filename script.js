@@ -17,6 +17,18 @@ const modeToggle = document.getElementById("mode-toggle");
 const modeIcon = modeToggle?.querySelector(".material-symbols-outlined");
 const micBtn = document.getElementById("mic-btn");
 
+function markAppView() {
+  const ua = navigator.userAgent || "";
+
+  // Android WebView detection (works for most APK webview wrappers)
+  const isWebView =
+    /wv/i.test(ua) || (ua.includes("Version/") && ua.includes("Chrome/"));
+
+  if (isWebView) document.body.classList.add("app-view");
+}
+
+document.addEventListener("DOMContentLoaded", markAppView);
+
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
@@ -33,6 +45,7 @@ document.addEventListener("DOMContentLoaded", initializeApp);
 
 async function initializeApp() {
   console.log("🚀 Initializing app...");
+  setupDownloadAppButton();
 
   // 1) Always show welcome first (no sidebar, no chat-started)
   initUIState();
@@ -464,63 +477,77 @@ function handleChat() {
         generateResponse(typingLi, userMessage);
     }, 600);
 }
-
 async function generateResponse(incomingChatli, userMessage) {
-    const messageElement = convertTypingToMessage(incomingChatli);
-    messageElement.innerHTML = "Thinking<span class='dots'></span>";
-    
-    // Check for special commands
-    if (await handleSpecialCommands(messageElement, userMessage)) {
-        return;
+  const messageElement = convertTypingToMessage(incomingChatli);
+  messageElement.innerHTML = "Thinking<span class='dots'></span>";
+
+  // Check for special commands
+  if (await handleSpecialCommands(messageElement, userMessage)) {
+    return;
+  }
+
+  try {
+    const userId = getUserId();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch(`${BACKEND_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: userId,
+        chatId: activeChatId,
+        message: userMessage.trim(),
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
     }
+
+    const data = await response.json();
+    const responseText = data.reply || "No response from AI.";
+
+    // ✅ 1) TYPE the plain text (ChatGPT feel)
+    messageElement.innerHTML = "";
+    const speed = responseText.length > 1200 ? 5 : 12;
+
     
-    // Normal AI response
-    try {
-        const userId = getUserId();
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
-        
-        const response = await fetch(`${BACKEND_URL}/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userId: userId,
-                chatId: activeChatId,
-                message: userMessage.trim()
-            }),
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeout);
-        
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        const responseText = data.reply || "No response from AI.";
-        
-        const htmlWithBlocks = parseFencedBlocks(responseText);
-        messageElement.innerHTML = `<div class="bot-message-content">${htmlWithBlocks}</div>`;
-        
-        if (window.Prism) Prism.highlightAllUnder(messageElement);
-        enableCopyButtons(messageElement);
-        ensureMsgActions(messageElement.closest(".bot-message-container"));
-        
-        // Save to conversation memory
-        conversationMemory.push({ role: "user", text: userMessage });
-        conversationMemory.push({ role: "assistant", text: responseText.replace(/<[^>]*>/g, "") });
-        
-        // Update sidebar
-        await loadSessionsSidebar();
-        
-    } catch (error) {
-        console.error("❌ Error generating response:", error);
-        messageElement.innerHTML = "❌ Failed to get response. Please try again.";
-    } finally {
-        chatbox.scrollTo(0, chatbox.scrollHeight);
-    }
+
+    // ✅ Typing effect (text + code typed inside block)
+messageElement.innerHTML = "";
+
+const textSpeed = responseText.length > 1200 ? 6 : 12;
+const codeSpeed = 3;
+
+await typeTextAndCode(messageElement, responseText, textSpeed, codeSpeed);
+
+// After typing finishes: highlight + copy
+if (window.Prism) Prism.highlightAllUnder(messageElement);
+enableCopyButtons(messageElement);
+ensureMsgActions(messageElement.closest(".bot-message-container"));
+
+
+    // Save to conversation memory
+    conversationMemory.push({ role: "user", text: userMessage });
+    conversationMemory.push({
+      role: "assistant",
+      text: responseText.replace(/<[^>]*>/g, ""),
+    });
+
+    // Update sidebar
+    await loadSessionsSidebar();
+  } catch (error) {
+    console.error("❌ Error generating response:", error);
+    messageElement.innerHTML = "❌ Failed to get response. Please try again.";
+  } finally {
+    chatbox.scrollTo(0, chatbox.scrollHeight);
+  }
 }
+
 
 async function handleSpecialCommands(messageElement, userMessage) {
     const lowerMessage = userMessage.toLowerCase();
@@ -972,5 +999,127 @@ document.addEventListener("click", function(e) {
     setTimeout(setupWebViewCloseButton, 300);
   }
 });
+
+// ---- Typing simulation helpers ----
+function escapeHTML(str = "") {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function typeCharsInto(el, text, baseSpeed = 10) {
+  return new Promise((resolve) => {
+    const safe = escapeHTML(text);
+    let i = 0;
+    el.innerHTML = "";
+
+    function tick() {
+      if (i >= safe.length) return resolve();
+
+      el.innerHTML += safe[i++];
+      const chatbox = document.querySelector(".chatbox");
+      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+
+      let delay = baseSpeed;
+      const c = safe[i - 1];
+      if (c === "\n") delay = 25;
+      else if (c === "." || c === "!" || c === "?") delay = 120;
+      else if (c === "," || c === ";") delay = 60;
+
+      setTimeout(tick, delay);
+    }
+
+    tick();
+  });
+}
+
+async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4) {
+  const regex = /```(\w+)?\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+
+  element.innerHTML = "";
+
+  while ((match = regex.exec(fullText)) !== null) {
+    const before = fullText.slice(lastIndex, match.index);
+    const lang = (match[1] || "text").toLowerCase();
+    const code = match[2] || "";
+
+    // 🔹 Type normal text
+    if (before) {
+      const span = document.createElement("span");
+      element.appendChild(span);
+
+      const lines = before.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        await typeCharsInto(span, lines[i], textSpeed);
+        if (i < lines.length - 1) span.innerHTML += "<br>";
+      }
+    }
+
+    // 🔹 Create code block immediately
+    const block = document.createElement("div");
+    block.className = "code-block";
+    block.innerHTML = `
+      <button class="code-copy-btn" type="button">Copy</button>
+      <pre class="language-${lang}"><code class="language-${lang}"></code></pre>
+    `;
+    element.appendChild(block);
+
+    // 🔹 Type code inside <code>
+    const codeEl = block.querySelector("code");
+    await typeCharsInto(codeEl, code, codeSpeed);
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining text
+  const rest = fullText.slice(lastIndex);
+  if (rest) {
+    const span = document.createElement("span");
+    element.appendChild(span);
+
+    const lines = rest.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      await typeCharsInto(span, lines[i], textSpeed);
+      if (i < lines.length - 1) span.innerHTML += "<br>";
+    }
+  }
+}
+const APK_URL =
+  "https://github.com/Anup851/genie.apk/releases/download/v1.0/Genie.AI_v1.0.apk";
+
+function isRunningInsideApp() {
+  if (window.GENIE_APP === true) return true;
+  if (document.body.classList.contains("app-view")) return true;
+
+  const ua = navigator.userAgent || "";
+  const isWebView =
+    /wv/i.test(ua) || (ua.includes("Version/") && ua.includes("Chrome/"));
+  return isWebView;
+}
+
+
+function setupDownloadAppButton() {
+  const btn = document.getElementById("download-app-btn");
+  if (!btn) return;
+
+  if (isRunningInsideApp()) {
+    btn.style.display = "none";
+    return;
+  }
+
+  btn.style.display = "inline-flex";
+  btn.href = APK_URL;
+
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    // GitHub release link works great with direct navigation
+    window.location.href = APK_URL;
+  });
+}
+
+
 
 // ================= END OF CODE =================
