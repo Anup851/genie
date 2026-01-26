@@ -1636,10 +1636,58 @@ body.app-view #download-app-btn,
 body.app-view .apk-download-btn{
   display: none !important;
 }
-/* APP VIEW: override safe-top only inside WebView */
+/* APP VIEW + MOBILE: header height same, but items bottom-aligned */
 @media (max-width: 480px){
-  body.app-view{
-    --safe-top: 30px; /* try 24 / 30 / 34 */
+  body.app-view .chatbot header{
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 999 !important;
+
+    height: 72px !important;          /* fixed header height (same) */
+    padding-top: 18px !important;     /* safe space */
+    padding-bottom: 8px !important;
+
+    display: block !important;        /* we will position items manually */
+  }
+
+  /* Menu (sidebar toggle) bottom-left */
+  body.app-view .chatbot header #sidebar-toggle{
+    position: absolute !important;
+    left: 12px !important;
+    bottom: 8px !important;           /* ⬅ bottom near */
+    top: auto !important;
+  }
+
+  /* Title bottom-center */
+  body.app-view .chatbot header h2{
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+
+    bottom: 14px !important;          /* ⬅ a bit higher than buttons */
+    top: auto !important;
+
+    margin: 0 !important;
+    width: auto !important;
+    max-width: 60% !important;
+    text-align: center !important;
+
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Mode toggle bottom-right */
+  body.app-view .chatbot header #mode-toggle{
+    position: absolute !important;
+    right: 12px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
+
+  /* If close btn exists, keep it hidden or place it too */
+  body.app-view .chatbot header #close-chatbot{
+    display: none !important;
   }
 }
 
