@@ -20,19 +20,18 @@ const micBtn = document.getElementById("mic-btn");
 function markAppView() {
   const ua = navigator.userAgent || "";
 
-  // Android WebView detection (works for most APK webview wrappers)
-  const isWebView =
-    /wv/i.test(ua) || (ua.includes("Version/") && ua.includes("Chrome/"));
+  // ✅ Better: only wv means WebView
+  const isWebView = /wv/i.test(ua);
 
   if (isWebView) document.body.classList.add("app-view");
 }
-
 document.addEventListener("DOMContentLoaded", markAppView);
 
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
-const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
+const BACKEND_URL = "https://genie-backend-ftqw.onrender.com";
+
 
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
 let conversationMemory = [];
@@ -847,7 +846,8 @@ function escapeHtml(str) {
 
 async function testBackendConnection() {
     try {
-        const response = await fetch(BACKEND_URL);
+        const response = await fetch(`${BACKEND_URL}/`);
+
         if (response.ok) {
             console.log("✅ Backend is reachable");
             return true;
@@ -1123,3 +1123,7 @@ function setupDownloadAppButton() {
 
 
 // ================= END OF CODE =================
+
+
+console.log("Loaded from:", location.href);
+console.log("Script version: v12");
