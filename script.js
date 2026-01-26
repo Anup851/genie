@@ -1008,24 +1008,32 @@ function escapeHTML(str = "") {
     .replace(/>/g, "&gt;");
 }
 
-function typeCharsInto(el, text, baseSpeed = 10) {
+function typeCharsInto(el, text, baseSpeed = 10, mode = "html") {
   return new Promise((resolve) => {
-    const safe = escapeHTML(text);
+    const safe = mode === "html" ? escapeHTML(text) : text;
     let i = 0;
-    el.innerHTML = "";
 
     function tick() {
       if (i >= safe.length) return resolve();
 
-      el.innerHTML += safe[i++];
+      const ch = safe[i++];
+
+      if (mode === "html") {
+        // convert \n to <br> for normal text
+        if (ch === "\n") el.innerHTML += "<br>";
+        else el.innerHTML += ch;
+      } else {
+        // code: keep exact newlines/spacing
+        el.textContent += ch;
+      }
+
       const chatbox = document.querySelector(".chatbox");
       if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
 
       let delay = baseSpeed;
-      const c = safe[i - 1];
-      if (c === "\n") delay = 25;
-      else if (c === "." || c === "!" || c === "?") delay = 120;
-      else if (c === "," || c === ";") delay = 60;
+      if (ch === "\n") delay = 25;
+      else if (ch === "." || ch === "!" || ch === "?") delay = 120;
+      else if (ch === "," || ch === ";") delay = 60;
 
       setTimeout(tick, delay);
     }
@@ -1041,24 +1049,47 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
 
   element.innerHTML = "";
 
+  // helper: type normal text (HTML safe) + \n => <br>
+  async function typePlainText(target, text) {
+    const safe = escapeHTML(text); // your escapeHTML / escapeHtml function
+    for (let i = 0; i < safe.length; i++) {
+      const ch = safe[i];
+      if (ch === "\n") target.innerHTML += "<br>";
+      else target.innerHTML += ch;
+
+      const chatbox = document.querySelector(".chatbox");
+      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+
+      await new Promise((r) => setTimeout(r, textSpeed));
+    }
+  }
+
+  // helper: type code EXACT (textContent)
+  async function typeCode(target, code) {
+    target.textContent = "";
+    for (let i = 0; i < code.length; i++) {
+      target.textContent += code[i];
+
+      const chatbox = document.querySelector(".chatbox");
+      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+
+      await new Promise((r) => setTimeout(r, codeSpeed));
+    }
+  }
+
   while ((match = regex.exec(fullText)) !== null) {
     const before = fullText.slice(lastIndex, match.index);
     const lang = (match[1] || "text").toLowerCase();
     const code = match[2] || "";
 
-    // 🔹 Type normal text
+    // ✅ Type normal text (preserve newlines)
     if (before) {
       const span = document.createElement("span");
       element.appendChild(span);
-
-      const lines = before.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        await typeCharsInto(span, lines[i], textSpeed);
-        if (i < lines.length - 1) span.innerHTML += "<br>";
-      }
+      await typePlainText(span, before);
     }
 
-    // 🔹 Create code block immediately
+    // ✅ Create code block
     const block = document.createElement("div");
     block.className = "code-block";
     block.innerHTML = `
@@ -1067,26 +1098,22 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
     `;
     element.appendChild(block);
 
-    // 🔹 Type code inside <code>
+    // ✅ Type code (exact formatting)
     const codeEl = block.querySelector("code");
-    await typeCharsInto(codeEl, code, codeSpeed);
+    await typeCode(codeEl, code);
 
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining text
+  // ✅ Remaining text
   const rest = fullText.slice(lastIndex);
   if (rest) {
     const span = document.createElement("span");
     element.appendChild(span);
-
-    const lines = rest.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      await typeCharsInto(span, lines[i], textSpeed);
-      if (i < lines.length - 1) span.innerHTML += "<br>";
-    }
+    await typePlainText(span, rest);
   }
 }
+
 const APK_URL =
   "https://github.com/Anup851/genie.apk/releases/download/v1.0/Genie.AI_v1.0.apk";
 
