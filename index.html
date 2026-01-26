@@ -30,7 +30,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css">
 
   </head>
-  <body class="in-app">
+  <body > 
 
     
   <div class="welcome">
@@ -38,8 +38,12 @@
       <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>
     </h1>
     <p>Click here to start a conversation</p>
-    <button class="start-chat-btn">Chat with Genie</button><br>
-    <p1> </p1>
+    <div class="welcome-actions">
+  <button class="start-chat-btn">Chat with Genie</button>
+  <a id="download-app-btn" class="download-app-btn" href="#">Download App</a>
+</div>
+
+
   </div>
 
   <!-- Sidebar for chat history -->
@@ -47,24 +51,24 @@
 
   <!-- HEADER -->
   <div class="history-header">
-
     <div class="history-actions">
+      
       <!-- NEW CHAT -->
-      <button id="new-chat-btn" class="new-chat-btn">
-  <span class="material-symbols-outlined">add</span>
-  <span class="new-chat-text">New chat</span>
-</button>
-
+      <button id="new-chat-btn" class="new-chat-btn" type="button">
+        <span class="material-symbols-outlined">add</span>
+        <span class="new-chat-text">New chat</span>
+      </button>
 
       <!-- CLOSE SIDEBAR -->
-      <button id="close-sidebar" class="material-symbols-outlined close-sidebar-btn">
+      <button id="close-sidebar" class="material-symbols-outlined close-sidebar-btn" type="button">
         close
       </button>
+
     </div>
   </div>
 
   <!-- DELETE ALL -->
-  <button class="delete-all-btn">
+  <button class="delete-all-btn" type="button">
     <span class="material-icons">delete_forever</span>
     Delete All
   </button>
@@ -77,21 +81,42 @@
 </div>
 
 
-  <div class="container">
-    <button class="chatbot-toggler"></button>
-    <div class="chatbot">
-      <header>
-        <button id="sidebar-toggle" class="menu-toggle material-symbols-outlined">menu</button>
-        <h2>Genie</h2>
-        <button id="mode-toggle" title="Toggle Mode">
-          <span class="material-symbols-outlined">dark_mode</span>
-        </button>
-        <!-- Change this: -->
-<span id="close-chatbot" class="material-symbols-outlined close-btn">close</span>
+<div class="container">
+  <button class="chatbot-toggler"></button>
 
-<!-- To this: -->
+  <div class="chatbot">
+   <header class="chat-header">
 
-      </header>
+  <!-- LEFT -->
+  <div class="header-left">
+    <button id="sidebar-toggle" class="menu-toggle material-symbols-outlined">menu</button>
+  </div>
+
+  <!-- CENTER -->
+  <h2 class="chat-title">Genie</h2>
+
+  <!-- RIGHT -->
+  <div class="header-right">
+    <a
+      id="apk-download-header"
+      class="apk-download-btn"
+      href="https://github.com/Anup851/genie.apk/releases/download/v1.0/Genie.AI_v1.0.apk"
+      download
+    >
+      <span class="material-symbols-outlined">download</span>
+      <span class="apk-text">APK</span>
+    </a>
+
+    <button id="mode-toggle">
+      <span class="material-symbols-outlined">dark_mode</span>
+    </button>
+
+    <button id="close-chatbot" class="material-symbols-outlined close-btn">close</button>
+  </div>
+
+</header>
+
+
 
       <!-- ✅ Global Chat Container (Corrected Placement) -->
       <div class="chat-container"></div>
