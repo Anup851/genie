@@ -1417,3 +1417,223 @@ body.light-mode .history-list .error {
   }
 }
 
+/* Download App – similar size to Chat with Genie */
+.download-app-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 8px 16px;        /* ⬅ close to Chat with Genie */
+  font-size: 14px;          /* ⬅ readable, not bulky */
+  font-weight: 600;
+
+  border-radius: 12px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  text-decoration: none;
+
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.download-app-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.download-app-btn:active{
+  transform: scale(0.98);
+}
+@media (max-width: 480px) {
+  .download-app-btn{
+    padding: 7px 14px;
+    font-size: 13px;
+  }
+}
+
+/* ================= WELCOME BUTTON LAYOUT (FINAL FIX) ================= */
+
+/* Container that holds both buttons */
+.welcome-actions{
+  display: flex;
+  justify-content: center;
+  align-items: center;        /* ✅ same line vertically */
+  gap: 16px;                  /* ✅ gap between buttons */
+  margin-top: 20px;
+  flex-wrap: nowrap;          /* ✅ prevent wrapping on desktop/webview */
+}
+
+/* Force BOTH buttons to look identical */
+.welcome-actions .start-chat-btn,
+.welcome-actions .download-app-btn{
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  height: 44px !important;          /* ✅ same height */
+  min-width: 190px !important;      /* ✅ same width */
+  padding: 0 18px !important;       /* ✅ same horizontal padding */
+
+  font-size: 14px !important;
+  font-weight: 600 !important;
+
+  line-height: 44px !important;     /* ✅ fixes WebView baseline issue */
+  border-radius: 12px !important;
+  box-sizing: border-box !important;
+
+  white-space: nowrap !important;
+  margin: 0 !important;             /* ✅ remove default button/a margins */
+}
+
+/* Make <a> behave like button */
+.welcome-actions .download-app-btn{
+  text-decoration: none !important;
+  border: none !important;
+}
+
+/* Mobile layout: stack buttons vertically */
+@media (max-width: 480px){
+  .welcome-actions{
+    flex-direction: column;          /* ✅ up-down */
+    gap: 14px;
+  }
+
+  .welcome-actions .start-chat-btn,
+  .welcome-actions .download-app-btn{
+    width: 100% !important;
+    max-width: 260px !important;
+  }
+}
+/* ================= HEADER APK DOWNLOAD BUTTON ================= */
+
+/* ================= HEADER GRID ================= */
+.chat-header{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 56px;
+  padding: 0 12px;
+}
+
+/* Left / Right groups */
+.header-left,
+.header-right{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-left{ justify-content: flex-start; }
+.header-right{ justify-content: flex-end; }
+
+/* FORCE Genie dead-center */
+.chat-title{
+  margin: 0;
+  text-align: center;
+  justify-self: center;
+  pointer-events: none;
+}
+
+/* ================= APK BUTTON ================= */
+.apk-download-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+
+  color: var(--text-primary);
+  background: var(--secondary-bg);
+  border: 1px solid rgba(100, 100, 104, 0.35);
+}
+
+.apk-download-btn .material-symbols-outlined{
+  font-size: 16px;
+}
+
+/* Hide inside APK */
+body.in-app .apk-download-btn{
+  display: none !important;
+}
+
+/* ================= MOBILE (≤480) ================= */
+@media (max-width: 480px){
+
+  /* Move download NEXT TO menu (swap position) */
+  .header-left{
+    gap: 6px;
+  }
+
+  .header-right{
+    gap: 6px;
+  }
+
+  /* ICON ONLY */
+  .apk-download-btn{
+    padding: 0;
+    width: 34px;
+    justify-content: center;
+  }
+
+  .apk-download-btn .apk-text{
+    display: none;
+  }
+}
+/* ================= DESKTOP FIX (Download at LEFT END) ================= */
+@media (min-width: 481px){
+
+  /* Place download button at far left of the header */
+  .apk-download-btn{
+    justify-self: start;
+    grid-column: 1;            /* left column */
+    grid-row: 1;
+    margin-left: 0;
+    margin-right: 12px;
+  }
+
+  /* Keep right actions still on right */
+  .header-right{
+    grid-column: 3;            /* right column */
+    justify-self: end;
+  }
+
+  /* Keep title centered */
+  .chat-title{
+    grid-column: 2;
+    justify-self: center;
+  }
+}
+.header-right{
+  display: contents; /* allows children to act like grid items */
+}
+
+/* ================= APP VIEW (WebView): PUSH HEADER DOWN ================= */
+body.app-view .chatbot header{
+  padding-top: 14px !important;     /* change 10/12/14/16 */
+  height: calc(56px + 14px) !important;
+}
+
+/* keep title + buttons aligned vertically */
+body.app-view .chatbot header > *{
+  align-self: center;
+}
+body.app-view .chat-header{
+  padding-top: 14px !important;
+  height: calc(56px + 14px) !important;
+}
+
+body.app-view .chat-header > *{
+  align-self: center;
+}
+body.app-view #download-app-btn,
+body.app-view .apk-download-btn{
+  display: none !important;
+}
+
