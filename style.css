@@ -1317,3 +1317,103 @@ body.light-mode .history-list .error {
     backdrop-filter: blur(4px);
   }
 }
+/* ================= MOBILE HEADER FINAL (NO ERRORS) ================= */
+@media (max-width: 480px) {
+  :root { --safe-top: 18px; } /* change 12/18/24 if needed */
+
+  /* Header: one row, no border line */
+  .chatbot header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 999 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+
+    padding: calc(12px + var(--safe-top)) 12px 12px !important;
+
+    background: var(--secondary-bg) !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+  }
+
+  /* LEFT: Menu button (no background) */
+  body.chat-started #sidebar-toggle {
+    position: static !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: 44px !important;
+    height: 44px !important;
+
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: 1000 !important;
+  }
+
+  /* CENTER: Genie title (perfect center, slightly down) */
+  .chatbot header h2 {
+    margin: 0 !important;
+    flex: 1 !important;
+    text-align: center !important;
+
+    position: relative !important;
+    top: 2px !important; /* Genie little down */
+
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* RIGHT: Mode button (always visible, no background) */
+  #mode-toggle {
+    position: static !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: 44px !important;
+    height: 44px !important;
+
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: 1000 !important;
+  }
+}
+/* ================= MOBILE: HISTORY HEADER DOWN (SAFE TOP) ================= */
+@media (max-width: 480px) {
+  :root { --safe-top: 18px; } /* same value you use for chatbot header */
+
+  /* Sidebar itself stays full height but content starts lower */
+  body.chat-started .history-sidebar {
+    padding-top: calc(12px + var(--safe-top)) !important;
+    background: var(--secondary-bg) !important;
+  }
+
+  /* If your history header is sticky, keep it aligned */
+  .history-header {
+    position: sticky !important;
+    top: 0 !important;
+    background: var(--secondary-bg) !important;
+    z-index: 10 !important;
+    border-bottom: none !important; /* removes any thin line */
+    box-shadow: none !important;
+  }
+}
+
