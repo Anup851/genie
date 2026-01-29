@@ -30,7 +30,8 @@ document.addEventListener("DOMContentLoaded", markAppView);
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
-const BACKEND_URL = "https://genie-backend-ftqw.onrender.com";
+const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
+
 
 
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
