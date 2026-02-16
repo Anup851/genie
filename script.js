@@ -16,23 +16,88 @@ const startChatBtn = document.querySelector(".start-chat-btn");
 const modeToggle = document.getElementById("mode-toggle");
 const modeIcon = modeToggle?.querySelector(".material-symbols-outlined");
 const micBtn = document.getElementById("mic-btn");
+const authBtn = document.getElementById("auth-btn");
 
-function markAppView() {
-  const ua = navigator.userAgent || "";
 
-  // ✅ Better: only wv means WebView
-  const isWebView = /wv/i.test(ua);
+// ================= DOM ELEMENTS =================
+// ... (keep all your DOM element declarations as is)
 
-  if (isWebView) document.body.classList.add("app-view");
+// ================= SUPABASE AUTH =================
+// 🔴 REPLACE WITH YOUR ACTUAL VALUES
+const SUPABASE_URL = 'https://your-project-id.supabase.co';
+const SUPABASE_ANON_KEY = 'your-anon-key-here';
+
+// Initialize Supabase
+const supabase = window.supabase?.createClient 
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+// ================= AUTH HELPER FUNCTIONS =================
+async function getCurrentUser() {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }
-document.addEventListener("DOMContentLoaded", markAppView);
 
+async function getSession() {
+  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session;
+}
+
+// ✅ SINGLE getUserId function (KEEP THIS ONE, DELETE THE OTHER)
+async function getUserId() {
+  // Try to get real user ID from Supabase first
+  const user = await getCurrentUser();
+  if (user) {
+    return user.id; // Real authenticated user ID
+  }
+  
+  // Fallback for guests
+  let guestId = localStorage.getItem('genie_guest_id');
+  if (!guestId) {
+    guestId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    localStorage.setItem('genie_guest_id', guestId);
+  }
+  return guestId;
+}
+
+// Update auth button based on login status
+async function updateAuthButton() {
+  const authBtn = document.getElementById('auth-btn');
+  if (!authBtn) return;
+  
+  const session = await getSession();
+  
+  if (session) {
+    // User is logged in
+    authBtn.innerHTML = `
+      <span class="material-symbols-outlined">logout</span>
+      <span class="auth-text">Logout</span>
+    `;
+    
+    // Add logout functionality
+    authBtn.onclick = async () => {
+      await supabase.auth.signOut();
+      localStorage.removeItem('genie_guest_id');
+      location.reload();
+    };
+  } else {
+    // User is logged out
+    authBtn.innerHTML = `
+      <span class="material-symbols-outlined">person</span>
+      <span class="auth-text">Login</span>
+    `;
+    
+    authBtn.onclick = () => {
+      window.location.href = './auth.html';
+    };
+  }
+}
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
 const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
-
-
 
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
 let conversationMemory = [];
@@ -41,17 +106,29 @@ let speechRecognition = null;
 let voices = [];
 
 // ================= INITIALIZATION =================
-document.addEventListener("DOMContentLoaded", initializeApp);
+// ✅ SINGLE DOMContentLoaded handler
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log("🚀 Initializing app...");
+  
+  // Update auth button first
+  await updateAuthButton();
+  
+  // Then initialize the rest
+  await initializeApp();
+  markAppView();
+  setupDownloadAppButton();
+  fixSidebarCloseButton();
+  setupWebViewCloseButton();
+});
 
 async function initializeApp() {
   console.log("🚀 Initializing app...");
-  setupDownloadAppButton();
 
-  // 1) Always show welcome first (no sidebar, no chat-started)
+  // 1) Always show welcome first
   initUIState();
 
-  // 2) User
-  const userId = getUserId();
+  // 2) User - ✅ FIXED with await
+  const userId = await getUserId();
   console.log("👤 User ID:", userId);
 
   // 3) Theme + speech + mic
@@ -62,15 +139,13 @@ async function initializeApp() {
   // 4) Events
   initEventListeners();
 
-  // 5) Backend check (don't block UI)
+  // 5) Backend check
   testBackendConnection().catch(console.error);
 
-  // 6) OPTIONAL: Preload last chat in background (welcome stays)
+  // 6) Preload last chat
   if (activeChatId && chatbox) {
     try {
       await loadChatFromServer(activeChatId);
-      // IMPORTANT: do NOT add chat-started here
-      // welcome screen remains visible until user clicks Start Chat
     } catch (e) {
       console.warn("⚠️ Could not preload last chat:", e);
     }
@@ -83,14 +158,7 @@ async function initializeApp() {
 // ================= CORE FUNCTIONS =================
 
 // 1. USER MANAGEMENT
-function getUserId() {
-    let userId = localStorage.getItem('genie_userId');
-    if (!userId) {
-        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('genie_userId', userId);
-    }
-    return userId;
-}
+
 
 function initUIState() {
   // ALWAYS start on welcome screen
@@ -135,6 +203,13 @@ function initTheme() {
 
 // 4. EVENT LISTENERS
 function initEventListeners() {
+    if (authBtn) {
+        authBtn.addEventListener("click", () => {
+            const authPath = "./auth.html";
+            window.location.href = authPath;
+        });
+    }
+
     // Send message on button click
     if (sendChatBtn) sendChatBtn.addEventListener("click", handleChat);
     
@@ -266,7 +341,7 @@ async function startChat() {
 }
 
 async function ensureActiveChat() {
-    const userId = getUserId();
+    const userId = await getUserId();  // ✅ Added await
     
     if (!activeChatId) {
         // Create new chat
@@ -294,7 +369,7 @@ async function ensureActiveChat() {
 }
 
 async function createNewChat() {
-    const userId = getUserId();
+    const userId = await getUserId();
     
     try {
         const resp = await fetch(`${BACKEND_URL}/chat/new`, {
@@ -320,7 +395,7 @@ async function openSession(chatId) {
 }
 
 async function loadSessionsSidebar() {
-    const userId = getUserId();
+    const userId = await getUserId();
     
     try {
         const resp = await fetch(`${BACKEND_URL}/chats/${userId}`);
@@ -376,7 +451,7 @@ async function loadSessionsSidebar() {
 }
 
 async function loadChatFromServer(chatId) {
-    const userId = getUserId();
+    const userId = await getUserId();
     
     try {
         const resp = await fetch(`${BACKEND_URL}/chat/${userId}/${chatId}`);
@@ -421,7 +496,7 @@ async function loadChatFromServer(chatId) {
 }
 
 async function deleteSession(chatId) {
-    const userId = getUserId();
+    const userId = await getUserId();
     
     try {
         await fetch(`${BACKEND_URL}/chat/${userId}/${chatId}`, {
@@ -487,7 +562,7 @@ async function generateResponse(incomingChatli, userMessage) {
   }
 
   try {
-    const userId = getUserId();
+    const userId =await getUserId();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
