@@ -1827,3 +1827,58 @@ body.app-view.light-mode .chatbox .outgoing p {
     z-index: 1001 !important;
   }
 }
+
+/* Auth Button Styles */
+#auth-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 30px;
+  background-color:  transparent !important;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 26px;
+  font-weight: 800;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+#auth-btn.logged-in {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  padding: 6px 16px 6px 12px;
+}
+
+#auth-btn.logged-in:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+}
+
+#auth-btn .auth-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+#auth-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  #auth-btn .auth-text {
+    display: none;
+  }
+  
+  #auth-btn {
+    padding: 8px;
+    border-radius: 50%;
+    aspect-ratio: 1;
+  }
+  
+  #auth-btn .material-symbols-outlined {
+    margin: 0;
+  }
+}
