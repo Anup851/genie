@@ -1,3 +1,5 @@
+
+
 // ================= DOM ELEMENTS =================
 const chatbotToggler = document.querySelector(".chatbot-toggler");
 const closeBtn = document.querySelector(".close-btn");
@@ -24,24 +26,30 @@ const authBtn = document.getElementById("auth-btn");
 
 // ================= SUPABASE AUTH =================
 // 🔴 REPLACE WITH YOUR ACTUAL VALUES
-const SUPABASE_URL = 'https://your-project-id.supabase.co';
-const SUPABASE_ANON_KEY = 'your-anon-key-here';
+// ================= SUPABASE AUTH =================
+// ✅ Use the ONE global client created in index.html
+const supabaseClient = window.supabaseClient || null;
 
-// Initialize Supabase
-const supabase = window.supabase?.createClient 
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
+// small helper to avoid crashes
+function ensureSupabase() {
+  if (!supabaseClient) {
+    console.warn("❌ supabaseClient not found. Did you init it in index.html?");
+    return false;
+  }
+  return true;
+}
+
 
 // ================= AUTH HELPER FUNCTIONS =================
 async function getCurrentUser() {
-  if (!supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  if (!ensureSupabase()) return null;
+  const { data: { user } } = await supabaseClient.auth.getUser();
   return user;
 }
 
 async function getSession() {
-  if (!supabase) return null;
-  const { data: { session } } = await supabase.auth.getSession();
+  if (!ensureSupabase()) return null;
+  const { data: { session } } = await supabaseClient.auth.getSession();
   return session;
 }
 
@@ -63,37 +71,187 @@ async function getUserId() {
 }
 
 // Update auth button based on login status
+// ================= AUTH BUTTON HANDLER =================
+
+// ================= AUTH BUTTON HANDLER =================
+
+// ================= AUTH BUTTON HANDLER =================
+// ================= COMPLETE AUTH SYSTEM WITH LOGOUT =================
+
+// Update auth button based on login status
+// ================= COMPLETE AUTH SYSTEM WITH NO REFRESH =================
+
+// Update auth button based on login status
 async function updateAuthButton() {
-  const authBtn = document.getElementById('auth-btn');
+  const authBtn = document.getElementById("auth-btn");
   if (!authBtn) return;
-  
+
+  const newBtn = authBtn.cloneNode(true);
+  authBtn.parentNode.replaceChild(newBtn, authBtn);
+
+  if (newBtn.tagName === "BUTTON") newBtn.type = "button";
+
   const session = await getSession();
-  
+
   if (session) {
-    // User is logged in
-    authBtn.innerHTML = `
-      <span class="material-symbols-outlined">logout</span>
-      <span class="auth-text">Logout</span>
+    const userEmail = session.user?.email || "User";
+    const displayName = userEmail.split("@")[0];
+
+    newBtn.innerHTML = `
+      <span class="material-symbols-outlined">account_circle</span>
+      <span class="auth-text">${displayName}</span>
     `;
-    
-    // Add logout functionality
-    authBtn.onclick = async () => {
-      await supabase.auth.signOut();
-      localStorage.removeItem('genie_guest_id');
-      location.reload();
-    };
+
+    // ✅ CHANGE: go to auth page instead of logout confirm
+    newBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = "./auth.html";
+    });
+
   } else {
-    // User is logged out
-    authBtn.innerHTML = `
+    newBtn.innerHTML = `
       <span class="material-symbols-outlined">person</span>
       <span class="auth-text">Login</span>
     `;
-    
-    authBtn.onclick = () => {
-      window.location.href = './auth.html';
-    };
+
+    newBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = "./auth.html";
+    });
   }
 }
+
+
+// Handle logout process
+async function handleLogout() {
+  try {
+    console.log('🚪 Logging out...');
+    
+    // Show loading state
+    const authBtn = document.getElementById('auth-btn');
+    if (authBtn) {
+      authBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span><span>Logging out...</span>';
+      authBtn.disabled = true;
+    }
+    
+    // Sign out from Supabase
+    const { error } = await supabaseClient.auth.signOut();
+
+    if (error) throw error;
+    
+    // Clear local data
+    localStorage.removeItem('genie_guest_id');
+    localStorage.removeItem('genie_activeChatId');
+    
+    // Clear Supabase session data
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('supabase') || key.includes('sb-')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Reset UI
+    if (chatbox) chatbox.innerHTML = '';
+    if (welcome) {
+      welcome.style.display = 'block';
+      container.style.display = 'none';
+    }
+    
+    document.body.classList.remove('chat-started', 'show-chatbot', 'show-history');
+    
+    // Update button back to login
+    await updateAuthButton();
+    
+    // Show success message
+    alert('✅ Logged out successfully!');
+    
+  } catch (error) {
+    console.error('❌ Logout error:', error);
+    alert('❌ Failed to logout');
+    await updateAuthButton();
+  }
+}
+
+// Optional: Add a nice notification system
+function showNotification(message, type = 'info') {
+  // Check if notification container exists
+  let container = document.getElementById('notification-container');
+  
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'notification-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+    `;
+    document.body.appendChild(container);
+  }
+  
+  // Create notification
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    background: ${type === 'success' ? '#10b981' : '#ef4444'};
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideIn 0.3s ease;
+    font-weight: 500;
+    min-width: 200px;
+  `;
+  notification.textContent = message;
+  
+  container.appendChild(notification);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+// Add animation styles
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+  
+  #auth-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  #auth-btn:hover {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+  }
+  
+  #auth-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+document.head.appendChild(style);
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
@@ -120,6 +278,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   fixSidebarCloseButton();
   setupWebViewCloseButton();
 });
+
+// ================= WEBVIEW DETECTION =================
+function markAppView() {
+  const ua = navigator.userAgent || "";
+  const isWebView = /wv/i.test(ua) || 
+                    (ua.includes("Version/") && ua.includes("Chrome/"));
+  
+  if (isWebView) {
+    document.body.classList.add("app-view");
+    console.log("📱 App view detected");
+  }
+}
 
 async function initializeApp() {
   console.log("🚀 Initializing app...");
@@ -200,15 +370,15 @@ function initTheme() {
         modeIcon.textContent = "light_mode";
     }
 }
-
 // 4. EVENT LISTENERS
 function initEventListeners() {
-    if (authBtn) {
-        authBtn.addEventListener("click", () => {
-            const authPath = "./auth.html";
-            window.location.href = authPath;
-        });
-    }
+    // 🔴 COMMENT OUT THIS OLD AUTH HANDLER - It's conflicting!
+    // if (authBtn) {
+    //     authBtn.addEventListener("click", () => {
+    //         const authPath = "./auth.html";
+    //         window.location.href = authPath;
+    //     });
+    // }
 
     // Send message on button click
     if (sendChatBtn) sendChatBtn.addEventListener("click", handleChat);
@@ -273,7 +443,6 @@ function initEventListeners() {
             }
         });
     }
-    
     
     // New chat button
     if (newChatBtn) {
@@ -517,7 +686,7 @@ async function deleteSession(chatId) {
 }
 
 async function deleteAllChats() {
-    const userId = getUserId();
+    const userId = await getUserId();
     
     if (!confirm("Are you sure you want to delete all chats?")) return;
     
@@ -1230,3 +1399,4 @@ function setupDownloadAppButton() {
 
 console.log("Loaded from:", location.href);
 console.log("Script version: v12");
+
