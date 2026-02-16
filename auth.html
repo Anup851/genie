@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genie Auth</title>
+
+    <!-- ✅ Supabase -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- ✅ Material Icons (for the chat icon button) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+
     <style>
       :root {
         --primary-bg: #0a0b0f;
@@ -19,6 +26,8 @@
         --success-text: #86efac;
         --error-bg: rgba(239, 68, 68, 0.16);
         --error-text: #fca5a5;
+        --info-bg: rgba(59, 130, 246, 0.16);
+        --info-text: #93c5fd;
       }
 
       * {
@@ -33,9 +42,16 @@
         display: grid;
         place-items: center;
         padding: 20px;
-        background:
-          radial-gradient(900px circle at 8% -10%, rgba(99, 102, 241, 0.28), transparent 55%),
-          radial-gradient(700px circle at 100% 0%, rgba(139, 92, 246, 0.22), transparent 50%),
+        background: radial-gradient(
+            900px circle at 8% -10%,
+            rgba(99, 102, 241, 0.28),
+            transparent 55%
+          ),
+          radial-gradient(
+            700px circle at 100% 0%,
+            rgba(139, 92, 246, 0.22),
+            transparent 50%
+          ),
           var(--primary-bg);
       }
 
@@ -49,6 +65,17 @@
         border-radius: 18px;
         padding: 28px 24px;
         box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+        transition: opacity 220ms ease, transform 220ms ease;
+      }
+
+      /* ✅ page transition animation */
+      .fade-out {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      .fade-in {
+        opacity: 1;
+        transform: translateY(0);
       }
 
       .close-auth {
@@ -126,10 +153,16 @@
         border-color: rgba(16, 185, 129, 0.35);
       }
 
+      .status.info {
+        display: block;
+        background: var(--info-bg);
+        color: var(--info-text);
+        border-color: rgba(59, 130, 246, 0.35);
+      }
+
       form {
         display: none;
       }
-
       form.active {
         display: block;
       }
@@ -187,190 +220,348 @@
         transform: translateY(0);
       }
 
+      /* ✅ Logged-in section (same theme) */
+      #already-logged {
+        display: none;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.55);
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 16px;
+        transition: opacity 220ms ease, transform 220ms ease;
+      }
+
+      #already-logged h2 {
+        color: var(--text-primary);
+        font-size: 1.05rem;
+        margin-bottom: 8px;
+      }
+
+      #already-logged p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+        word-break: break-word;
+      }
+
+      .row-btns {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      /* ✅ Icon button for chat */
+      .icon-btn {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.65);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition: transform 160ms ease, border-color 200ms ease, box-shadow 200ms ease;
+      }
+
+      .icon-btn:hover {
+        transform: translateY(-1px);
+        border-color: rgba(99, 102, 241, 0.6);
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+      }
+
+      .icon-btn .material-icons {
+        font-size: 22px;
+      }
+
+      .logout-wide {
+        flex: 1;
+        margin-top: 0;
+      }
+
       @media (max-width: 480px) {
         body {
           padding: 14px;
         }
-
         .card {
           max-width: 100%;
           padding: 22px 16px;
           border-radius: 15px;
         }
-
         .title {
           font-size: 1.42rem;
         }
-        /* Add this to your <style> section */
-.status.info {
-  display: block;
-  background: rgba(59, 130, 246, 0.16);
-  color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.35);
-}
       }
     </style>
   </head>
+
   <body>
-    <div class="card">
+    <div class="card fade-in" id="card">
       <button id="close-auth-btn" class="close-auth" type="button" aria-label="Back to chat">×</button>
+
       <h1 class="title">Genie</h1>
 
-      <div class="tabs">
+      <!-- ✅ Already logged in -->
+      <div id="already-logged">
+        <h2>✅ You are already logged in</h2>
+        <p id="logged-email">Loading...</p>
+
+        <div class="row-btns">
+          <!-- ✅ ICON instead of button -->
+          <button id="go-chat-btn" class="icon-btn" type="button" title="Go to Chat" aria-label="Go to Chat">
+            <span class="material-icons">chat</span>
+          </button>
+
+          <button id="logout-btn" class="submit logout-wide" type="button">Logout</button>
+        </div>
+      </div>
+
+      <div class="tabs" id="auth-tabs">
         <button class="tab active" id="tab-login" type="button">Login</button>
         <button class="tab" id="tab-signup" type="button">Sign Up</button>
       </div>
 
       <div id="status" class="status"></div>
 
-      <form id="form-login" class="active">
-        <label for="login-username">Username</label>
-        <input id="login-username" autocomplete="username" required />
+      <form id="form-login" class="active" novalidate>
+        <label for="login-username">Email</label>
+        <input id="login-username" type="email" autocomplete="username" required />
+
         <label for="login-password">Password</label>
         <input id="login-password" type="password" autocomplete="current-password" required />
-        <button class="submit" type="submit">Login</button>
+
+        <button class="submit" id="login-btn" type="submit">Login</button>
       </form>
 
-      <form id="form-signup">
-        <label for="signup-username">Username</label>
-        <input id="signup-username" autocomplete="username" required />
+      <form id="form-signup" novalidate>
+        <label for="signup-username">Email</label>
+        <input id="signup-username" type="email" autocomplete="username" required />
+
         <label for="signup-password">Password</label>
         <input id="signup-password" type="password" autocomplete="new-password" minlength="6" required />
+
         <label for="signup-confirm">Confirm Password</label>
         <input id="signup-confirm" type="password" autocomplete="new-password" minlength="6" required />
-        <button class="submit" type="submit">Create Account</button>
+
+        <button class="submit" id="signup-btn" type="submit">Create Account</button>
       </form>
     </div>
-<!-- Add this in the <head> section -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Replace your existing script with this -->
-<script>
-  // ================= CONFIGURATION =================
-  // 🔴 REPLACE THESE WITH YOUR ACTUAL VALUES FROM STEP 2
-  const SUPABASE_URL = 'https://nikzyppkwedmzldghrgh.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM';
-  
-  // Initialize Supabase client
-   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true
-    }
-  });
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        // ================= CONFIGURATION =================
+        const SUPABASE_URL = "https://nikzyppkwedmzldghrgh.supabase.co";
+        const SUPABASE_ANON_KEY =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM";
 
-  // ================= UI ELEMENTS =================
-  const tabLogin = document.getElementById("tab-login");
-  const tabSignup = document.getElementById("tab-signup");
-  const closeAuthBtn = document.getElementById("close-auth-btn");
-  const loginForm = document.getElementById("form-login");
-  const signupForm = document.getElementById("form-signup");
-  const statusBox = document.getElementById("status");
+        if (!window.supabase) {
+          alert("Supabase CDN failed to load. Check internet / script tag.");
+          return;
+        }
 
-  // ================= HELPER FUNCTIONS =================
-  function showStatus(type, message) {
-    statusBox.className = `status ${type}`;
-    statusBox.textContent = message;
-  }
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
+        });
 
-  function clearStatus() {
-    statusBox.className = "status";
-    statusBox.textContent = "";
-  }
+        // ================= UI ELEMENTS =================
+        const card = document.getElementById("card");
 
-  function switchTab(mode) {
-    clearStatus();
-    const loginMode = mode === "login";
-    tabLogin.classList.toggle("active", loginMode);
-    tabSignup.classList.toggle("active", !loginMode);
-    loginForm.classList.toggle("active", loginMode);
-    signupForm.classList.toggle("active", !loginMode);
-  }
+        const tabLogin = document.getElementById("tab-login");
+        const tabSignup = document.getElementById("tab-signup");
+        const closeAuthBtn = document.getElementById("close-auth-btn");
+        const loginForm = document.getElementById("form-login");
+        const signupForm = document.getElementById("form-signup");
+        const statusBox = document.getElementById("status");
 
-  // ================= TAB SWITCHING =================
-  tabLogin.addEventListener("click", () => switchTab("login"));
-  tabSignup.addEventListener("click", () => switchTab("signup"));
-  
-  closeAuthBtn.addEventListener("click", () => {
-    window.location.href = "index.html";
-  });
+        const loginBtn = document.getElementById("login-btn");
+        const signupBtn = document.getElementById("signup-btn");
 
-  // ================= LOGIN FORM =================
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearStatus();
-    
-    const email = document.getElementById("login-username").value.trim();
-    const password = document.getElementById("login-password").value;
-    
-    // Show loading
-    showStatus("info", "Logging in...");
-    
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    
-    if (error) {
-      showStatus("error", error.message);
-    } else {
-      showStatus("success", "Login successful! Redirecting...");
-      setTimeout(() => window.location.href = "index.html", 1000);
-    }
-  });
+        const alreadyBox = document.getElementById("already-logged");
+        const loggedEmail = document.getElementById("logged-email");
+        const authTabs = document.getElementById("auth-tabs");
+        const goChatBtn = document.getElementById("go-chat-btn");
+        const logoutBtn = document.getElementById("logout-btn");
 
-  // ================= SIGNUP FORM =================
-  signupForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearStatus();
-    
-    const email = document.getElementById("signup-username").value.trim();
-    const password = document.getElementById("signup-password").value;
-    const confirm = document.getElementById("signup-confirm").value;
-    
-    if (password !== confirm) {
-      showStatus("error", "Passwords do not match");
-      return;
-    }
-    
-    if (password.length < 6) {
-      showStatus("error", "Password must be at least 6 characters");
-      return;
-    }
-    
-    // Show loading
-    showStatus("info", "Creating account...");
-    
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password
-    });
-    
-    if (error) {
-      showStatus("error", error.message);
-    } else {
-      if (data.user?.identities?.length === 0) {
-        showStatus("error", "Email already registered. Try logging in.");
-      } else {
-        showStatus("success", "Account created! Check your email for confirmation.");
-        // Auto switch to login tab after 3 seconds
-        setTimeout(() => switchTab("login"), 3000);
-      }
-    }
-  });
+        // ================= HELPERS =================
+        function showStatus(type, message) {
+          statusBox.className = `status ${type}`;
+          statusBox.textContent = message;
+        }
 
-  // ================= CHECK IF ALREADY LOGGED IN =================
-  async function checkExistingSession() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      // Already logged in, go to main app
-      window.location.href = "index.html";
-    }
-  }
-  
-  // Run on page load
-  checkExistingSession();
-</script>
+        function clearStatus() {
+          statusBox.className = "status";
+          statusBox.textContent = "";
+        }
+
+        function setLoading(btn, isLoading, defaultText) {
+          btn.disabled = isLoading;
+          btn.textContent = isLoading ? "Please wait..." : defaultText;
+        }
+
+        function switchTab(mode) {
+          clearStatus();
+          const loginMode = mode === "login";
+          tabLogin.classList.toggle("active", loginMode);
+          tabSignup.classList.toggle("active", !loginMode);
+          loginForm.classList.toggle("active", loginMode);
+          signupForm.classList.toggle("active", !loginMode);
+        }
+
+        function showLoggedInUI(email) {
+          alreadyBox.style.display = "block";
+          authTabs.style.display = "none";
+          loginForm.classList.remove("active");
+          signupForm.classList.remove("active");
+          loggedEmail.textContent = "Logged in as: " + (email || "");
+          clearStatus();
+        }
+
+        function showAuthFormsUI() {
+          alreadyBox.style.display = "none";
+          authTabs.style.display = "flex";
+          switchTab("login");
+        }
+
+        // ✅ Smooth animation when switching logged-in → login forms after logout
+        function animateToLoginUI() {
+          // fade out the card slightly
+          card.classList.add("fade-out");
+
+          setTimeout(() => {
+            // show login UI
+            showAuthFormsUI();
+
+            // reset animation
+            card.classList.remove("fade-out");
+            // force reflow for clean transition
+            void card.offsetWidth;
+            card.classList.add("fade-in");
+          }, 260);
+        }
+
+        // ================= EVENTS =================
+        tabLogin.addEventListener("click", () => switchTab("login"));
+        tabSignup.addEventListener("click", () => switchTab("signup"));
+
+        closeAuthBtn.addEventListener("click", () => (window.location.href = "index.html"));
+        goChatBtn.addEventListener("click", () => (window.location.href = "index.html"));
+
+        logoutBtn.addEventListener("click", async () => {
+          clearStatus();
+          showStatus("info", "Logging out...");
+          logoutBtn.disabled = true;
+
+          const { error } = await supabaseClient.auth.signOut();
+          logoutBtn.disabled = false;
+
+          if (error) {
+            showStatus("error", error.message);
+            return;
+          }
+
+          showStatus("success", "Logged out successfully ✅");
+
+          // ✅ after small delay, animate & show login page UI
+          setTimeout(() => {
+            clearStatus();
+            animateToLoginUI();
+          }, 450);
+        });
+
+        // ================= LOGIN =================
+        loginForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          clearStatus();
+
+          const email = document.getElementById("login-username").value.trim();
+          const password = document.getElementById("login-password").value;
+
+          if (!email || !password) {
+            showStatus("error", "Please enter email and password.");
+            return;
+          }
+
+          showStatus("info", "Logging in...");
+          setLoading(loginBtn, true, "Login");
+
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+          setLoading(loginBtn, false, "Login");
+
+          if (error) {
+            showStatus("error", error.message);
+            return;
+          }
+
+          showStatus("success", "Login successful ✅");
+          const sessionEmail = data?.user?.email || email;
+
+          // optional: small animation to switch
+          card.classList.add("fade-out");
+          setTimeout(() => {
+            card.classList.remove("fade-out");
+            showLoggedInUI(sessionEmail);
+          }, 220);
+        });
+
+        // ================= SIGNUP =================
+        signupForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          clearStatus();
+
+          const email = document.getElementById("signup-username").value.trim();
+          const password = document.getElementById("signup-password").value;
+          const confirm = document.getElementById("signup-confirm").value;
+
+          if (!email) {
+            showStatus("error", "Email is required.");
+            return;
+          }
+          if (password !== confirm) {
+            showStatus("error", "Passwords do not match");
+            return;
+          }
+          if (password.length < 6) {
+            showStatus("error", "Password must be at least 6 characters");
+            return;
+          }
+
+          showStatus("info", "Creating account...");
+          setLoading(signupBtn, true, "Create Account");
+
+          const { data, error } = await supabaseClient.auth.signUp({ email, password });
+
+          setLoading(signupBtn, false, "Create Account");
+
+          if (error) {
+            showStatus("error", error.message);
+            return;
+          }
+
+          if (data.user?.identities?.length === 0) {
+            showStatus("error", "Email already registered. Try logging in.");
+          } else {
+            showStatus("success", "Account created! Check your email for confirmation.");
+            setTimeout(() => switchTab("login"), 1800);
+          }
+        });
+
+        // ================= CHECK SESSION (NO AUTO REDIRECT) =================
+        (async function checkExistingSession() {
+          const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+          if (error) {
+            console.warn("Session check error:", error.message);
+            showAuthFormsUI();
+            return;
+          }
+
+          if (session) showLoggedInUI(session.user?.email || "");
+          else showAuthFormsUI();
+        })();
+      });
+    </script>
   </body>
 </html>
