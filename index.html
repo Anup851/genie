@@ -2,149 +2,188 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Add to your HTML head -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' *; style-src 'self' 'unsafe-inline' *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *;">
+
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' 'unsafe-inline' 'unsafe-eval' *; style-src 'self' 'unsafe-inline' *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *;"
+    />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chatbot</title>
-    <link rel="stylesheet" href="style.css" />
-    
-    <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-javascript.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-css.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-markup.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-python.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-c.min.js"></script>
 
-    <script src="script.js" defer></script>
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- Prism -->
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-javascript.min.js" defer></script>
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css"
+    />
+
+    <!-- ✅ Material Symbols (for header icons like menu/dark_mode/close/download/person) -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
     />
-    
+
+    <!-- ✅ Material Icons (for delete_forever icon) -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@48,400,1,0"
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
     />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css">
+    <!-- ✅ LOAD SUPABASE FIRST (NO defer) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+    <!-- ✅ CREATE CLIENT IMMEDIATELY (NOT DOMContentLoaded) -->
+    <script>
+      const SUPABASE_URL = "https://nikzyppkwedmzldghrgh.supabase.co";
+      const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+
+      window.supabaseClient = supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+      );
+
+      console.log("✅ Supabase initialized BEFORE script.js");
+    </script>
+
+    <!-- ✅ NOW load your main JS -->
+    <script src="script.js" defer></script>
   </head>
-  <body class="in-app" > 
 
-    
-  <div class="welcome">
-    <h1 class="welcomes">
-      <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>
-    </h1>
-    <p>Click here to start a conversation</p>
-    <div class="welcome-actions">
-  <button class="start-chat-btn">Chat with Genie</button>
-  <a id="download-app-btn" class="download-app-btn" href="#">Download App</a>
-</div>
-
-
-  </div>
-
-  <!-- Sidebar for chat history -->
-<div class="history-sidebar">
-
-  <!-- HEADER -->
-  <div class="history-header">
-    <div class="history-actions">
-      
-      <!-- NEW CHAT -->
-      <button id="new-chat-btn" class="new-chat-btn" type="button">
-        <span class="material-symbols-outlined">add</span>
-        <span class="new-chat-text">New chat</span>
-      </button>
-
-      <!-- CLOSE SIDEBAR -->
-      <button id="close-sidebar" class="material-symbols-outlined close-sidebar-btn" type="button">
-        close
-      </button>
-
-    </div>
-  </div>
-
-  <!-- DELETE ALL -->
-  <button class="delete-all-btn" type="button">
-    <span class="material-icons">delete_forever</span>
-    Delete All
-  </button>
-
-  <!-- CHAT LIST -->
-  <ul class="history-list">
-    <!-- sessions will render here -->
-  </ul>
-
-</div>
-
-
-<div class="container">
-  <button class="chatbot-toggler"></button>
-
-  <div class="chatbot">
-   <header class="chat-header">
-
-  <!-- LEFT -->
-  <div class="header-left">
-    <button id="sidebar-toggle" class="menu-toggle material-symbols-outlined">menu</button>
-  </div>
-
-  <!-- CENTER -->
-  <h2 class="chat-title">Genie</h2>
-
-  <!-- RIGHT -->
-  <div class="header-right">
-    <a
-      id="apk-download-header"
-      class="apk-download-btn"
-      href="https://github.com/Anup851/genie.apk/releases/download/v1.0/Genie.AI_v1.0.apk"
-      download
-    >
-      <span class="material-symbols-outlined">download</span>
-      <span class="apk-text">APK</span>
-    </a>
-
-    <button id="auth-btn" class="auth-header-btn" type="button">
-      <span class="material-symbols-outlined">person</span>
-      <span class="auth-text">Login</span>
-    </button>
-
-    <button id="mode-toggle">
-      <span class="material-symbols-outlined">dark_mode</span>
-    </button>
-
-    <button id="close-chatbot" class="material-symbols-outlined close-btn">close</button>
-  </div>
-
-</header>
-
-
-
-      <!-- ✅ Global Chat Container (Corrected Placement) -->
-      <div class="chat-container"></div>
-
-      <ul class="chatbox">
-        <li class="chat incoming">
-  <div class="bot-message-container">
-    <p>Hello I am Genie 👏 <br>How can I assist you today?</p>
-  </div>
-</li>
-
-
-      </ul>
-
-      <div class="chat-input">
-        <textarea placeholder="Send a Message" spellcheck="false" required></textarea>
-        <button id="mic-btn" class="material-symbols-outlined" title="Speak" type="button">mic</button>
-        <label for="image-upload" class="material-icons upload-icon" title="Upload Image">image</label>
-        <input type="file" id="image-upload" accept="image/*" style="display: none;" />
-        <button id="send-btn" class="material-symbols-outlined" type="button">send</button>
+  <body class="in-app">
+    <div class="welcome">
+      <h1 class="welcomes">
+        <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>
+      </h1>
+      <p>Click here to start a conversation</p>
+      <div class="welcome-actions">
+        <button class="start-chat-btn" type="button">Chat with Genie</button>
+        <a id="download-app-btn" class="download-app-btn" href="#">Download App</a>
       </div>
     </div>
-  </div>
+
+    <!-- Sidebar for chat history -->
+    <div class="history-sidebar">
+      <!-- HEADER -->
+      <div class="history-header">
+        <div class="history-actions">
+          <!-- NEW CHAT -->
+          <button id="new-chat-btn" class="new-chat-btn" type="button">
+            <span class="material-symbols-outlined">add</span>
+            <span class="new-chat-text">New chat</span>
+          </button>
+
+          <!-- CLOSE SIDEBAR -->
+          <button
+            id="close-sidebar"
+            class="material-symbols-outlined close-sidebar-btn"
+            type="button"
+          >
+            close
+          </button>
+        </div>
+      </div>
+
+      <!-- DELETE ALL -->
+      <button class="delete-all-btn" type="button">
+        <span class="material-icons">delete_forever</span>
+        Delete All
+      </button>
+
+      <!-- CHAT LIST -->
+      <ul class="history-list">
+        <!-- sessions will render here -->
+      </ul>
+    </div>
+
+    <div class="container">
+      <button class="chatbot-toggler" type="button"></button>
+
+      <div class="chatbot">
+        <header class="chat-header">
+          <!-- LEFT -->
+          <div class="header-left">
+            <button
+              id="sidebar-toggle"
+              class="menu-toggle material-symbols-outlined"
+              type="button"
+            >
+              menu
+            </button>
+          </div>
+
+          <!-- CENTER -->
+          <h2 class="chat-title">Genie</h2>
+
+          <!-- RIGHT -->
+          <div class="header-right">
+            <a
+              id="apk-download-header"
+              class="apk-download-btn"
+              href="https://github.com/Anup851/genie.apk/releases/download/v1.0/Genie.AI_v1.0.apk"
+              download
+            >
+              <span class="material-symbols-outlined">download</span>
+              <span class="apk-text">APK</span>
+            </a>
+
+            <button id="auth-btn" type="button">
+              <span class="material-symbols-outlined">person</span>
+              <span class="auth-text">Login</span>
+            </button>
+
+            <button id="mode-toggle" type="button">
+              <span class="material-symbols-outlined">dark_mode</span>
+            </button>
+
+            <button
+              id="close-chatbot"
+              class="material-symbols-outlined close-btn"
+              type="button"
+            >
+              close
+            </button>
+          </div>
+        </header>
+
+        <!-- ✅ Global Chat Container (Corrected Placement) -->
+        <div class="chat-container"></div>
+
+        <ul class="chatbox">
+          <li class="chat incoming">
+            <div class="bot-message-container">
+              <p>Hello I am Genie 👏 <br />How can I assist you today?</p>
+            </div>
+          </li>
+        </ul>
+
+        <div class="chat-input">
+          <textarea placeholder="Send a Message" spellcheck="false" required></textarea>
+          <button
+            id="mic-btn"
+            class="material-symbols-outlined"
+            title="Speak"
+            type="button"
+          >
+            mic
+          </button>
+          <label
+            for="image-upload"
+            class="material-icons upload-icon"
+            title="Upload Image"
+          >
+            image
+          </label>
+          <input type="file" id="image-upload" accept="image/*" style="display: none" />
+          <button id="send-btn" class="material-symbols-outlined" type="button">
+            send
+          </button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
