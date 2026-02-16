@@ -70,8 +70,8 @@
 
   /* Chat bubble theme */
   --bubble-in: var(--secondary-bg);
-  --bubble-out: var(--secondary-bg);
-  --bubble-out-border: rgba(255, 255, 255, 0.14);
+  --bubble-out: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  --bubble-out-border: rgba(139, 92, 246, 0.55);
 }
 
 * {
@@ -274,7 +274,7 @@ body.chat-started .chatbot {
 .chatbox .outgoing p {
   background: var(--bubble-out);
   border: 1px solid var(--bubble-out-border);
-  color: var(--text-primary);
+  color: #ffffff;
   padding: var(--space-sm);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
   margin-left: auto;
@@ -700,7 +700,7 @@ body.light-mode {
   --text-primary: #1e293b;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
-  --bubble-out-border: rgba(0, 0, 0, 0.12);
+  --bubble-out-border: rgba(99, 102, 241, 0.45);
 }
 
 /* App backgrounds */
@@ -747,10 +747,10 @@ body.light-mode .chatbox .incoming p {
 }
 
 body.light-mode .chatbox .outgoing p {
-  background: #ffffff;
-  color: var(--text-primary);
+  background: var(--bubble-out);
+  color: #ffffff;
   border: 1px solid var(--bubble-out-border);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.16);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.22);
 }
 
 /* Sidebar */
@@ -930,6 +930,7 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
 }
 
 .bot-message-content {
+  color: white;
   width: 100%;
   max-width: 100%;
 }
@@ -961,6 +962,11 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
   top: 8px;
   right: 8px;
   z-index: 10;
+}
+
+body.light-mode .bot-message-content
+{
+  color: #000;
 }
 
 @media (max-width: 480px) {
@@ -1255,17 +1261,7 @@ body.light-mode .history-list .error {
     /* Keep original outgoing styles - don't change */
     justify-content: flex-end !important;
   }
-  
-  .chatbox .outgoing p {
-    /* Keep original outgoing styles - don't change */
-    max-width: 80% !important;
-    margin-left: auto !important;
-    margin-right: 8px !important;
-    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl) !important;
-    background: var(--bubble-out) !important;
-    border: 1px solid var(--bubble-out-border) !important;
-  }
-  
+   
   /* Code blocks on mobile */
   .bot-message-content .code-block {
     width: 100% !important;
@@ -1304,15 +1300,14 @@ body.light-mode .history-list .error {
 /* ✅ Light mode + Mobile: outgoing bubble should be subtle card like ChatGPT */
 @media (max-width: 480px) {
   body.light-mode .chatbox .outgoing p {
-    background: rgba(255, 255, 255, 0.7) !important;
-    color: var(--text-primary) !important;
-
-    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    background: var(--bubble-out) !important;
+    color: #ffffff !important;
+    border: 1px solid var(--bubble-out-border) !important;
     border-radius: 14px !important;
 
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.06),
-      0 6px 16px rgba(0, 0, 0, 0.06) !important;
+      0 2px 8px rgba(99, 102, 241, 0.2),
+      0 10px 22px rgba(99, 102, 241, 0.24) !important;
 
     backdrop-filter: blur(4px);
   }
@@ -1558,6 +1553,53 @@ body.light-mode .history-list .error {
   font-size: 16px;
 }
 
+.auth-header-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 34px;
+  width: 34px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--secondary-bg);
+  border: 1px solid rgba(100, 100, 104, 0.35);
+  cursor: pointer;
+  justify-content: center;
+  overflow: hidden;
+  transition: width .2s ease, padding .2s ease, border-color .2s ease, background .2s ease;
+}
+
+.auth-header-btn .material-symbols-outlined{
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+
+.auth-header-btn .auth-text{
+  opacity: 0;
+  max-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity .18s ease, max-width .2s ease, margin-left .2s ease;
+}
+
+@media (min-width: 481px){
+  .auth-header-btn:hover{
+    width: 108px;
+    padding: 0 12px;
+    justify-content: flex-start;
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  .auth-header-btn:hover .auth-text{
+    opacity: 1;
+    max-width: 72px;
+    margin-left: 6px;
+  }
+}
+
 /* Hide inside APK */
 body.in-app .apk-download-btn{
   display: none !important;
@@ -1582,7 +1624,22 @@ body.in-app .apk-download-btn{
     justify-content: center;
   }
 
+  .auth-header-btn{
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    color: #fff;
+    background: transparent;
+  }
+
   .apk-download-btn .apk-text{
+    display: none;
+  }
+
+  .auth-header-btn .auth-text{
     display: none;
   }
 }
@@ -1636,6 +1693,10 @@ body.app-view #download-app-btn,
 body.app-view .apk-download-btn{
   display: none !important;
 }
+
+body.app-view .auth-header-btn{
+  display: inline-flex !important;
+}
 /* APP VIEW + MOBILE: header height same, but items bottom-aligned */
 @media (max-width: 480px){
   body.app-view .chatbot header{
@@ -1685,9 +1746,84 @@ body.app-view .apk-download-btn{
     top: auto !important;
   }
 
+  body.app-view .chatbot header #auth-btn{
+    position: absolute !important;
+    right: 54px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
+
   /* If close btn exists, keep it hidden or place it too */
   body.app-view .chatbot header #close-chatbot{
     display: none !important;
   }
 }
 
+
+.code-block pre,
+.code-block code{
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.code-block pre{
+  overflow-x: auto;
+  max-width: 100%;
+}
+.code-block pre{ overflow-x:auto; max-width:100%; }
+.code-block pre, .code-block code{
+  white-space:pre;
+  word-break:normal;
+  overflow-wrap:normal;
+}
+
+/* ================= APP VIEW + LIGHT MODE: MATCH DARK BORDERS/RADIUS ================= */
+body.app-view.light-mode .chatbot {
+  border-left: none !important;
+}
+
+body.app-view.light-mode .chatbot header {
+  border-bottom: none !important;
+}
+
+body.app-view.light-mode .chat-input {
+  border-top: none !important;
+}
+
+body.app-view.light-mode .history-sidebar {
+  border-right: none !important;
+}
+
+body.app-view.light-mode .chat-input textarea {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: var(--radius-md) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+body.app-view.light-mode .history-list li {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+body.app-view.light-mode .chatbox .outgoing p {
+  background: var(--bubble-out) !important;
+  border: 1px solid var(--bubble-out-border) !important;
+  color: #ffffff !important;
+  padding: var(--space-sm) !important;
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl) !important;
+  margin-left: auto !important;
+  max-width: 80% !important;
+}
+
+
+/* ================= DESKTOP NORMAL MODE: AUTH LEFT OF MODE TOGGLE ================= */
+@media (min-width: 481px) {
+  body:not(.app-view) .chatbot header #auth-btn {
+    position: fixed !important;
+    top: 20px !important;
+    right: 64px !important;
+    left: auto !important;
+    z-index: 1001 !important;
+  }
+}
