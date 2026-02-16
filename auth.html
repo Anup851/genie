@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Genie Auth</title>
+    <style>
+      :root {
+        --primary-bg: #0a0b0f;
+        --secondary-bg: #111219;
+        --card-bg: rgba(17, 18, 25, 0.88);
+        --accent-primary: #6366f1;
+        --accent-secondary: #8b5cf6;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border: rgba(148, 163, 184, 0.2);
+        --success-bg: rgba(16, 185, 129, 0.16);
+        --success-text: #86efac;
+        --error-bg: rgba(239, 68, 68, 0.16);
+        --error-text: #fca5a5;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background:
+          radial-gradient(900px circle at 8% -10%, rgba(99, 102, 241, 0.28), transparent 55%),
+          radial-gradient(700px circle at 100% 0%, rgba(139, 92, 246, 0.22), transparent 50%),
+          var(--primary-bg);
+      }
+
+      .card {
+        position: relative;
+        width: 100%;
+        max-width: 430px;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        backdrop-filter: blur(12px);
+        border-radius: 18px;
+        padding: 28px 24px;
+        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+      }
+
+      .close-auth {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.7);
+        color: var(--text-secondary);
+        border-radius: 10px;
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+        cursor: pointer;
+      }
+
+      .close-auth:hover {
+        color: var(--text-primary);
+        border-color: rgba(99, 102, 241, 0.6);
+      }
+
+      .title {
+        text-align: center;
+        font-size: 1.6rem;
+        margin-bottom: 16px;
+        color: var(--text-primary);
+        font-weight: 700;
+      }
+
+      .tabs {
+        display: flex;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.7);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 18px;
+      }
+
+      .tab {
+        flex: 1;
+        border: 0;
+        padding: 11px 12px;
+        cursor: pointer;
+        background: transparent;
+        color: var(--text-secondary);
+        font-weight: 600;
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+
+      .tab.active {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        color: var(--text-primary);
+      }
+
+      .status {
+        display: none;
+        margin-bottom: 14px;
+        padding: 10px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        border: 1px solid transparent;
+      }
+
+      .status.error {
+        display: block;
+        background: var(--error-bg);
+        color: var(--error-text);
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+
+      .status.success {
+        display: block;
+        background: var(--success-bg);
+        color: var(--success-text);
+        border-color: rgba(16, 185, 129, 0.35);
+      }
+
+      form {
+        display: none;
+      }
+
+      form.active {
+        display: block;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 7px;
+        margin-top: 12px;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 12px;
+        font-size: 1rem;
+        background: rgba(15, 23, 42, 0.65);
+        color: var(--text-primary);
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      input::placeholder {
+        color: var(--text-muted);
+      }
+
+      input:focus {
+        border-color: rgba(99, 102, 241, 0.8);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+      }
+
+      .submit {
+        width: 100%;
+        margin-top: 18px;
+        border: 0;
+        border-radius: 11px;
+        padding: 12px;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        color: var(--text-primary);
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.16s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      }
+
+      .submit:hover {
+        filter: brightness(1.06);
+        transform: translateY(-1px);
+        box-shadow: 0 12px 30px rgba(99, 102, 241, 0.35);
+      }
+
+      .submit:active {
+        transform: translateY(0);
+      }
+
+      @media (max-width: 480px) {
+        body {
+          padding: 14px;
+        }
+
+        .card {
+          max-width: 100%;
+          padding: 22px 16px;
+          border-radius: 15px;
+        }
+
+        .title {
+          font-size: 1.42rem;
+        }
+        /* Add this to your <style> section */
+.status.info {
+  display: block;
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.35);
+}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <button id="close-auth-btn" class="close-auth" type="button" aria-label="Back to chat">×</button>
+      <h1 class="title">Genie</h1>
+
+      <div class="tabs">
+        <button class="tab active" id="tab-login" type="button">Login</button>
+        <button class="tab" id="tab-signup" type="button">Sign Up</button>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <form id="form-login" class="active">
+        <label for="login-username">Username</label>
+        <input id="login-username" autocomplete="username" required />
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+        <button class="submit" type="submit">Login</button>
+      </form>
+
+      <form id="form-signup">
+        <label for="signup-username">Username</label>
+        <input id="signup-username" autocomplete="username" required />
+        <label for="signup-password">Password</label>
+        <input id="signup-password" type="password" autocomplete="new-password" minlength="6" required />
+        <label for="signup-confirm">Confirm Password</label>
+        <input id="signup-confirm" type="password" autocomplete="new-password" minlength="6" required />
+        <button class="submit" type="submit">Create Account</button>
+      </form>
+    </div>
+<!-- Add this in the <head> section -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Replace your existing script with this -->
+<script>
+  // ================= CONFIGURATION =================
+  // 🔴 REPLACE THESE WITH YOUR ACTUAL VALUES FROM STEP 2
+  const SUPABASE_URL = 'https://nikzyppkwedmzldghrgh.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM';
+  
+  // Initialize Supabase client
+   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true
+    }
+  });
+
+  // ================= UI ELEMENTS =================
+  const tabLogin = document.getElementById("tab-login");
+  const tabSignup = document.getElementById("tab-signup");
+  const closeAuthBtn = document.getElementById("close-auth-btn");
+  const loginForm = document.getElementById("form-login");
+  const signupForm = document.getElementById("form-signup");
+  const statusBox = document.getElementById("status");
+
+  // ================= HELPER FUNCTIONS =================
+  function showStatus(type, message) {
+    statusBox.className = `status ${type}`;
+    statusBox.textContent = message;
+  }
+
+  function clearStatus() {
+    statusBox.className = "status";
+    statusBox.textContent = "";
+  }
+
+  function switchTab(mode) {
+    clearStatus();
+    const loginMode = mode === "login";
+    tabLogin.classList.toggle("active", loginMode);
+    tabSignup.classList.toggle("active", !loginMode);
+    loginForm.classList.toggle("active", loginMode);
+    signupForm.classList.toggle("active", !loginMode);
+  }
+
+  // ================= TAB SWITCHING =================
+  tabLogin.addEventListener("click", () => switchTab("login"));
+  tabSignup.addEventListener("click", () => switchTab("signup"));
+  
+  closeAuthBtn.addEventListener("click", () => {
+    window.location.href = "index.html";
+  });
+
+  // ================= LOGIN FORM =================
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearStatus();
+    
+    const email = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
+    
+    // Show loading
+    showStatus("info", "Logging in...");
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (error) {
+      showStatus("error", error.message);
+    } else {
+      showStatus("success", "Login successful! Redirecting...");
+      setTimeout(() => window.location.href = "index.html", 1000);
+    }
+  });
+
+  // ================= SIGNUP FORM =================
+  signupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearStatus();
+    
+    const email = document.getElementById("signup-username").value.trim();
+    const password = document.getElementById("signup-password").value;
+    const confirm = document.getElementById("signup-confirm").value;
+    
+    if (password !== confirm) {
+      showStatus("error", "Passwords do not match");
+      return;
+    }
+    
+    if (password.length < 6) {
+      showStatus("error", "Password must be at least 6 characters");
+      return;
+    }
+    
+    // Show loading
+    showStatus("info", "Creating account...");
+    
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password
+    });
+    
+    if (error) {
+      showStatus("error", error.message);
+    } else {
+      if (data.user?.identities?.length === 0) {
+        showStatus("error", "Email already registered. Try logging in.");
+      } else {
+        showStatus("success", "Account created! Check your email for confirmation.");
+        // Auto switch to login tab after 3 seconds
+        setTimeout(() => switchTab("login"), 3000);
+      }
+    }
+  });
+
+  // ================= CHECK IF ALREADY LOGGED IN =================
+  async function checkExistingSession() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      // Already logged in, go to main app
+      window.location.href = "index.html";
+    }
+  }
+  
+  // Run on page load
+  checkExistingSession();
+</script>
+  </body>
+</html>
