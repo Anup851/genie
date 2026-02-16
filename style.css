@@ -1839,8 +1839,8 @@ body.app-view.light-mode .chatbox .outgoing p {
   background-color:  transparent !important;
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 500;
   transition: all 0.3s ease;
   white-space: nowrap;
   max-width: 200px;
