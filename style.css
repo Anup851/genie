@@ -1741,7 +1741,7 @@ body.app-view .auth-header-btn{
   /* Mode toggle bottom-right */
   body.app-view .chatbot header #mode-toggle{
     position: absolute !important;
-    right: 12px !important;
+    right: 65px !important;
     bottom: 8px !important;
     top: auto !important;
   }
