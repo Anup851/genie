@@ -40,7 +40,8 @@
     <!-- ✅ CREATE CLIENT IMMEDIATELY (NOT DOMContentLoaded) -->
     <script>
       const SUPABASE_URL = "https://nikzyppkwedmzldghrgh.supabase.co";
-      const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+      const SUPABASE_ANON_KEY =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM";
 
       window.supabaseClient = supabase.createClient(
         SUPABASE_URL,
@@ -155,9 +156,9 @@
 
         <ul class="chatbox">
           <li class="chat incoming">
-            <div class="bot-message-container">
+            <!-- <div class="bot-message-container">
               <p>Hello I am Genie 👏 <br />How can I assist you today?</p>
-            </div>
+            </div> -->
           </li>
         </ul>
 

@@ -55,19 +55,13 @@ async function getSession() {
 
 // ✅ SINGLE getUserId function (KEEP THIS ONE, DELETE THE OTHER)
 async function getUserId() {
-  // Try to get real user ID from Supabase first
+  // Use only authenticated Supabase user
   const user = await getCurrentUser();
   if (user) {
-    return user.id; // Real authenticated user ID
+    return user.id;
   }
-  
-  // Fallback for guests
-  let guestId = localStorage.getItem('genie_guest_id');
-  if (!guestId) {
-    guestId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-    localStorage.setItem('genie_guest_id', guestId);
-  }
-  return guestId;
+
+  return null;
 }
 
 // Update auth button based on login status
@@ -255,6 +249,22 @@ document.head.appendChild(style);
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
 const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
 
+async function apiFetch(url, options = {}) {
+  const session = await getSession();
+  const accessToken = session?.access_token;
+  if (!accessToken) {
+    window.location.href = "./auth.html";
+    throw new Error("Not authenticated");
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    Authorization: `Bearer ${accessToken}`,
+  };
+
+  return fetch(url, { ...options, headers });
+}
+
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
 let conversationMemory = [];
 let activeChatId = localStorage.getItem("genie_activeChatId") || null;
@@ -297,6 +307,11 @@ async function initializeApp() {
 
   // 2) User - ✅ FIXED with await
   const userId = await getUserId();
+  if (!userId) {
+    console.warn("No authenticated session found. Redirecting to auth page...");
+    window.location.href = "./auth.html";
+    return;
+  }
   console.log("👤 User ID:", userId);
 
   // 3) Theme + speech + mic
@@ -506,10 +521,11 @@ async function startChat() {
 
 async function ensureActiveChat() {
     const userId = await getUserId();  // ✅ Added await
+    if (!userId) return;
     
     if (!activeChatId) {
         // Create new chat
-        const resp = await fetch(`${BACKEND_URL}/chat/new`, {
+        const resp = await apiFetch(`${BACKEND_URL}/chat/new`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId, title: "New chat" })
@@ -534,9 +550,10 @@ async function ensureActiveChat() {
 
 async function createNewChat() {
     const userId = await getUserId();
+    if (!userId) return;
     
     try {
-        const resp = await fetch(`${BACKEND_URL}/chat/new`, {
+        const resp = await apiFetch(`${BACKEND_URL}/chat/new`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId, title: "New chat" })
@@ -560,9 +577,10 @@ async function openSession(chatId) {
 
 async function loadSessionsSidebar() {
     const userId = await getUserId();
+    if (!userId) return;
     
     try {
-        const resp = await fetch(`${BACKEND_URL}/chats/${userId}`);
+        const resp = await apiFetch(`${BACKEND_URL}/chats/${userId}`);
         if (!resp.ok) throw new Error("Failed to load sessions");
         
         const data = await resp.json();
@@ -616,9 +634,10 @@ async function loadSessionsSidebar() {
 
 async function loadChatFromServer(chatId) {
     const userId = await getUserId();
+    if (!userId) return;
     
     try {
-        const resp = await fetch(`${BACKEND_URL}/chat/${userId}/${chatId}`);
+        const resp = await apiFetch(`${BACKEND_URL}/chat/${userId}/${chatId}`);
         if (!resp.ok) throw new Error("Failed to load chat");
         
         const data = await resp.json();
@@ -661,9 +680,10 @@ async function loadChatFromServer(chatId) {
 
 async function deleteSession(chatId) {
     const userId = await getUserId();
+    if (!userId) return;
     
     try {
-        await fetch(`${BACKEND_URL}/chat/${userId}/${chatId}`, {
+        await apiFetch(`${BACKEND_URL}/chat/${userId}/${chatId}`, {
             method: "DELETE"
         });
         
@@ -682,11 +702,12 @@ async function deleteSession(chatId) {
 
 async function deleteAllChats() {
     const userId = await getUserId();
+    if (!userId) return;
     
     if (!confirm("Are you sure you want to delete all chats?")) return;
     
     try {
-        await fetch(`${BACKEND_URL}/chats/${userId}`, {
+        await apiFetch(`${BACKEND_URL}/chats/${userId}`, {
             method: "DELETE"
         });
         
@@ -727,10 +748,15 @@ async function generateResponse(incomingChatli, userMessage) {
 
   try {
     const userId =await getUserId();
+    if (!userId) {
+      messageElement.innerHTML = "Please login first to continue chatting.";
+      window.location.href = "./auth.html";
+      return;
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch(`${BACKEND_URL}/chat`, {
+    const response = await apiFetch(`${BACKEND_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1394,5 +1420,4 @@ function setupDownloadAppButton() {
 
 console.log("Loaded from:", location.href);
 console.log("Script version: v12");
-
 

@@ -543,8 +543,15 @@
           if (data.user?.identities?.length === 0) {
             showStatus("error", "Email already registered. Try logging in.");
           } else {
-            showStatus("success", "Account created! Check your email for confirmation.");
-            setTimeout(() => switchTab("login"), 1800);
+            if (data.session) {
+              showStatus("success", "Account created and logged in.");
+              setTimeout(() => {
+                showLoggedInUI(data.user?.email || email);
+              }, 350);
+            } else {
+              showStatus("success", "Account created! Check your email for confirmation.");
+              setTimeout(() => switchTab("login"), 1800);
+            }
           }
         });
 
@@ -565,3 +572,4 @@
     </script>
   </body>
 </html>
+
