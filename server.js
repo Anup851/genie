@@ -565,6 +565,8 @@ async function analyzeMediaHandler(req, res) {
       });
     }
 
+    const mediaMaxTokens = Number(process.env.MEDIA_MAX_TOKENS || 700);
+
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -580,7 +582,7 @@ async function analyzeMediaHandler(req, res) {
             { role: "user", content: userParts },
           ],
           temperature: 0.3,
-          max_tokens: 1400,
+          max_tokens: mediaMaxTokens,
         }),
       },
     );
@@ -588,6 +590,12 @@ async function analyzeMediaHandler(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Media analyze API error:", response.status, errorText.slice(0, 300));
+      if (response.status === 402) {
+        return res.status(200).json({
+          reply:
+            "Media analysis paused: OpenRouter credits are low for current token budget. Add credits or reduce MEDIA_MAX_TOKENS in backend env.",
+        });
+      }
       return res.status(200).json({
         reply: "Sorry, media analysis failed. Please try again.",
       });
