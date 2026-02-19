@@ -1054,6 +1054,67 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
   color: white;
   width: 100%;
   max-width: 100%;
+  line-height: 1.65;
+  font-size: 15px;
+}
+
+.bot-message-content > *:first-child {
+  margin-top: 0;
+}
+
+.bot-message-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.bot-message-content p {
+  margin: 0 0 12px;
+}
+
+.bot-message-content h1,
+.bot-message-content h2,
+.bot-message-content h3,
+.bot-message-content h4,
+.bot-message-content h5,
+.bot-message-content h6 {
+  margin: 14px 0 10px;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.bot-message-content h1 { font-size: 1.45rem; }
+.bot-message-content h2 { font-size: 1.28rem; }
+.bot-message-content h3 { font-size: 1.15rem; }
+
+.bot-message-content ul,
+.bot-message-content ol {
+  margin: 0 0 12px 18px;
+  padding: 0 0 0 4px;
+}
+
+.bot-message-content li {
+  margin: 6px 0;
+}
+
+.bot-message-content blockquote {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 3px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.bot-message-content a {
+  color: #7dd3fc;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bot-message-content .inline-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.92em;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 1px 6px;
 }
 
 .bot-message-content .code-block {
@@ -1088,6 +1149,19 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
 body.light-mode .bot-message-content
 {
   color: #000;
+}
+
+body.light-mode .bot-message-content blockquote {
+  border-left: 3px solid rgba(15, 23, 42, 0.2);
+  background: rgba(15, 23, 42, 0.05);
+}
+
+body.light-mode .bot-message-content a {
+  color: #1d4ed8;
+}
+
+body.light-mode .bot-message-content .inline-code {
+  background: rgba(15, 23, 42, 0.08);
 }
 
 @media (max-width: 480px) {

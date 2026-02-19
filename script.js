@@ -26,6 +26,8 @@ let pendingImageData = null;
 let pendingImageName = "";
 let pendingMediaType = "";
 let pendingMediaPreviewHref = null;
+let pendingMediaSelected = false;
+let pendingMediaLoading = false;
 
 const SUPPORTED_MEDIA_MIME_TYPES = new Set([
   "application/pdf",
@@ -66,6 +68,16 @@ function isSupportedMediaFile(file) {
 
 function isImageDataUrl(dataUrl) {
   return /^data:image\//i.test(String(dataUrl || ""));
+}
+
+function isValidMediaDataUrl(dataUrl) {
+  return /^data:[^;,]+(?:;[^;,]+)*;base64,/i.test(
+    String(dataUrl || ""),
+  );
+}
+
+function isAnyDataUrl(dataUrl) {
+  return /^data:/i.test(String(dataUrl || ""));
 }
 
 function getMediaKindLabel(mimeType = "", dataUrl = "") {
@@ -123,6 +135,8 @@ function renderSelectedMediaPreview({ mediaData, mediaName, mediaType, previewHr
     pendingImageData = null;
     pendingImageName = "";
     pendingMediaType = "";
+    pendingMediaSelected = false;
+    pendingMediaLoading = false;
     if (imageUploadInput) imageUploadInput.value = "";
     revokePendingMediaPreviewHref();
     if (chatInput) chatInput.placeholder = "Ask anything with GENIE...";
@@ -589,11 +603,17 @@ function initEventListeners() {
 
             revokePendingMediaPreviewHref();
             pendingMediaPreviewHref = URL.createObjectURL(file);
+            pendingMediaSelected = true;
+            pendingMediaLoading = true;
+            pendingImageData = null;
+            pendingImageName = file.name || "file";
+            pendingMediaType = String(file.type || "");
 
             const reader = new FileReader();
             reader.onload = () => {
                 pendingImageData = String(reader.result || "");
-                pendingImageName = file.name || "image";
+                pendingMediaLoading = false;
+                pendingImageName = file.name || "file";
                 pendingMediaType = String(file.type || "");
                 renderSelectedMediaPreview({
                     mediaData: pendingImageData,
@@ -611,6 +631,8 @@ function initEventListeners() {
                 pendingImageData = null;
                 pendingImageName = "";
                 pendingMediaType = "";
+                pendingMediaSelected = false;
+                pendingMediaLoading = false;
                 revokePendingMediaPreviewHref();
                 alert("Failed to read file.");
             };
@@ -798,13 +820,12 @@ async function loadChatFromServer(chatId) {
                 chatbox.appendChild(createChatLi(msg.message, "outgoing"));
             } else {
                 const li = createChatLi("", "incoming");
-                const p = li.querySelector("p");
-                
-                const htmlWithBlocks = parseFencedBlocks(msg.message);
-                p.innerHTML = `<div class="bot-message-content">${htmlWithBlocks}</div>`;
-                
-                if (window.Prism) Prism.highlightAllUnder(p);
-                enableCopyButtons(p);
+                const content = li.querySelector(".bot-message-content");
+
+                content.innerHTML = parseFencedBlocks(msg.message);
+
+                if (window.Prism) Prism.highlightAllUnder(content);
+                enableCopyButtons(content);
                 ensureMsgActions(li.querySelector(".bot-message-container"));
                 
                 chatbox.appendChild(li);
@@ -873,7 +894,12 @@ async function deleteAllChats() {
 function handleChat() {
     const userMessage = chatInput?.value.trim() || "";
     if (!chatInput) return;
-    if (!userMessage && !pendingImageData) return;
+    if (!userMessage && !pendingMediaSelected) return;
+
+    if (pendingMediaSelected && pendingMediaLoading) {
+        alert("File is still loading. Please wait a moment and send again.");
+        return;
+    }
     
     // Clear input
     chatInput.value = "";
@@ -881,19 +907,34 @@ function handleChat() {
     const imageData = pendingImageData;
     const imageName = pendingImageName;
     const mediaType = pendingMediaType;
+    const mediaWasSelected = pendingMediaSelected;
     pendingImageData = null;
     pendingImageName = "";
     pendingMediaType = "";
+    pendingMediaSelected = false;
+    pendingMediaLoading = false;
     revokePendingMediaPreviewHref();
     if (imageUploadInput) imageUploadInput.value = "";
     if (chatInput) chatInput.placeholder = "Ask anything with GENIE...";
     clearSelectedMediaPreview();
 
+    const hasMediaPayload = mediaWasSelected && isAnyDataUrl(imageData);
+
+    if (mediaWasSelected && !hasMediaPayload) {
+        const errorLi = createChatLi(
+          "Selected file could not be prepared. Please upload again.",
+          "incoming",
+        );
+        chatbox.appendChild(errorLi);
+        chatbox.scrollTo(0, chatbox.scrollHeight);
+        return;
+    }
+
     // Add user message to chatbox
-    if (imageData && imageName) {
+    if (hasMediaPayload) {
         chatbox.appendChild(createOutgoingMediaLi({
             mediaData: imageData,
-            mediaName: imageName,
+            mediaName: imageName || "file",
             mediaType,
             mediaHref: imageData,
             prompt: userMessage,
@@ -906,28 +947,38 @@ function handleChat() {
     // Show typing indicator and generate response
     setTimeout(() => {
         const typingLi = showTypingIndicator();
+        const requestMode = hasMediaPayload ? "media" : "chat";
+        console.log(`[GENIE] Client requestMode=${requestMode} mediaWasSelected=${mediaWasSelected}`);
         generateResponse(
           typingLi,
           userMessage,
-          imageData
+          hasMediaPayload
             ? {
                 mediaData: imageData,
-                mediaName: imageName,
+                mediaName: imageName || "file",
                 mediaType,
               }
             : null,
+          requestMode,
         );
     }, 600);
 }
-async function generateResponse(incomingChatli, userMessage, mediaUpload = null) {
+async function generateResponse(
+  incomingChatli,
+  userMessage,
+  mediaUpload = null,
+  requestMode = "chat",
+) {
   const messageElement = convertTypingToMessage(incomingChatli);
   messageElement.innerHTML = "Thinking<span class='dots'></span>";
+  const hasMediaUpload = requestMode === "media";
 
   // Check for special commands
   if (await handleSpecialCommands(messageElement, userMessage)) {
     return;
   }
 
+  let timeout = null;
   try {
     const userId =await getUserId();
     if (!userId) {
@@ -936,11 +987,17 @@ async function generateResponse(incomingChatli, userMessage, mediaUpload = null)
       return;
     }
     const controller = new AbortController();
-    const requestTimeoutMs = mediaUpload?.mediaData ? 120000 : 30000;
-    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    const requestTimeoutMs = hasMediaUpload ? 120000 : 30000;
+    timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     let responseText = "";
 
-    if (mediaUpload?.mediaData) {
+    if (hasMediaUpload) {
+      if (!isAnyDataUrl(mediaUpload?.mediaData)) {
+        messageElement.innerHTML =
+          "Selected media is not ready yet. Please re-upload the file and send again.";
+        return;
+      }
+      console.log("[GENIE] Route: /analyze-media");
       const response = await apiFetch(`${BACKEND_URL}/analyze-media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -963,6 +1020,7 @@ async function generateResponse(incomingChatli, userMessage, mediaUpload = null)
       const data = await response.json();
       responseText = data.reply || "No response from AI.";
     } else {
+      console.log("[GENIE] Route: /chat");
       const response = await apiFetch(`${BACKEND_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -984,24 +1042,14 @@ async function generateResponse(incomingChatli, userMessage, mediaUpload = null)
       responseText = data.reply || "No response from AI.";
     }
 
-    // âœ… 1) TYPE the plain text (ChatGPT feel)
     messageElement.innerHTML = "";
-    const speed = responseText.length > 1200 ? 5 : 12;
-
-    
-
-    // âœ… Typing effect (text + code typed inside block)
-messageElement.innerHTML = "";
-
-const textSpeed = responseText.length > 1200 ? 6 : 12;
-const codeSpeed = 3;
-
-await typeTextAndCode(messageElement, responseText, textSpeed, codeSpeed);
-
-// After typing finishes: highlight + copy
-if (window.Prism) Prism.highlightAllUnder(messageElement);
-enableCopyButtons(messageElement);
-ensureMsgActions(messageElement.closest(".bot-message-container"));
+    const textSpeed =
+      responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
+    await typeRichMarkdown(messageElement, responseText, textSpeed);
+    messageElement.innerHTML = parseFencedBlocks(responseText);
+    if (window.Prism) Prism.highlightAllUnder(messageElement);
+    enableCopyButtons(messageElement);
+    ensureMsgActions(messageElement.closest(".bot-message-container"));
 
 
     // Save to conversation memory
@@ -1022,7 +1070,7 @@ ensureMsgActions(messageElement.closest(".bot-message-container"));
       messageElement.innerHTML = "Failed to get response. Please try again.";
     }
   } finally {
-    clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
     chatbox.scrollTo(0, chatbox.scrollHeight);
   }
 }
@@ -1140,10 +1188,11 @@ function createChatLi(message, className) {
     } else {
         const container = document.createElement("div");
         container.className = "bot-message-container";
-        
-        const p = document.createElement("p");
-        p.innerHTML = message;
-        container.appendChild(p);
+
+        const content = document.createElement("div");
+        content.className = "bot-message-content";
+        content.innerHTML = message;
+        container.appendChild(content);
         
         chatLi.appendChild(container);
     }
@@ -1172,10 +1221,10 @@ function convertTypingToMessage(incomingChatli) {
     incomingChatli.className = "chat incoming";
     incomingChatli.innerHTML = `
         <div class="bot-message-container">
-            <p></p>
+            <div class="bot-message-content"></div>
         </div>
     `;
-    return incomingChatli.querySelector("p");
+    return incomingChatli.querySelector(".bot-message-content");
 }
 
 function ensureMsgActions(container) {
@@ -1191,7 +1240,10 @@ function ensureMsgActions(container) {
     
     // Copy button functionality
     actions.querySelector(".copy-btn").addEventListener("click", () => {
-        const messageText = container.querySelector("p")?.innerText || "";
+        const messageText =
+            container.querySelector(".bot-message-content")?.innerText ||
+            container.querySelector("p")?.innerText ||
+            "";
         navigator.clipboard.writeText(messageText).then(() => {
             const btn = actions.querySelector(".copy-btn");
             btn.textContent = "done";
@@ -1203,7 +1255,10 @@ function ensureMsgActions(container) {
     
     // Speak button functionality
     actions.querySelector(".speak-btn").addEventListener("click", () => {
-        const messageText = container.querySelector("p")?.innerText || "";
+        const messageText =
+            container.querySelector(".bot-message-content")?.innerText ||
+            container.querySelector("p")?.innerText ||
+            "";
         if (!messageText) return;
         
         if (window.speechSynthesis.speaking) {
@@ -1237,31 +1292,162 @@ function ensureMsgActions(container) {
 
 // 8. CODE BLOCKS AND FORMATTING
 function parseFencedBlocks(text) {
-    const regex = /```(\w+)?\n([\s\S]*?)```/g;
-    let lastIndex = 0;
+    const source = String(text || "").replace(/\r\n/g, "\n");
+    const codeBlocks = [];
+    const withPlaceholders = source.replace(
+      /```([\w-]+)?\n([\s\S]*?)```/g,
+      (_, lang, code) => {
+        const idx =
+          codeBlocks.push({ lang: (lang || "text").toLowerCase(), code }) - 1;
+        return `\n@@CODE_BLOCK_${idx}@@\n`;
+      },
+    );
+
+    const lines = withPlaceholders.split("\n");
     let html = "";
-    
-    for (const match of text.matchAll(regex)) {
-        const [full, lang, code] = match;
-        const start = match.index;
-        const end = start + full.length;
-        
-        html += escapeHtml(text.slice(lastIndex, start)).replaceAll("\n", "<br>");
-        
-        const safeLang = (lang || "text").toLowerCase();
-        
+    let paragraphLines = [];
+    let listType = null;
+    let inBlockquote = false;
+    let blockquoteLines = [];
+
+    const closeParagraph = () => {
+      if (!paragraphLines.length) return;
+      html += `<p>${formatInlineText(paragraphLines.join("\n"))}</p>`;
+      paragraphLines = [];
+    };
+
+    const closeList = () => {
+      if (!listType) return;
+      html += `</${listType}>`;
+      listType = null;
+    };
+
+    const closeBlockquote = () => {
+      if (!inBlockquote) return;
+      const body = blockquoteLines
+        .map((line) => `<p>${formatInlineText(line)}</p>`)
+        .join("");
+      html += `<blockquote>${body}</blockquote>`;
+      blockquoteLines = [];
+      inBlockquote = false;
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine || "";
+      const trimmed = line.trim();
+      const codeToken = trimmed.match(/^@@CODE_BLOCK_(\d+)@@$/);
+
+      if (codeToken) {
+        closeParagraph();
+        closeList();
+        closeBlockquote();
+        const block = codeBlocks[Number(codeToken[1])];
+        if (!block) continue;
         html += `
-            <div class="code-block">
-                <button class="code-copy-btn" type="button">Copy</button>
-                <pre class="language-${safeLang}"><code class="language-${safeLang}">${escapeHtml(code)}</code></pre>
-            </div>
+          <div class="code-block">
+            <button class="code-copy-btn" type="button">Copy</button>
+            <pre class="language-${block.lang}"><code class="language-${block.lang}">${escapeHtml(block.code)}</code></pre>
+          </div>
         `;
-        
-        lastIndex = end;
+        continue;
+      }
+
+      if (!trimmed) {
+        closeParagraph();
+        closeList();
+        closeBlockquote();
+        continue;
+      }
+
+      const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        closeParagraph();
+        closeList();
+        closeBlockquote();
+        const level = heading[1].length;
+        html += `<h${level}>${formatInlineText(heading[2])}</h${level}>`;
+        continue;
+      }
+
+      const blockquote = trimmed.match(/^>\s?(.*)$/);
+      if (blockquote) {
+        closeParagraph();
+        closeList();
+        inBlockquote = true;
+        blockquoteLines.push(blockquote[1]);
+        continue;
+      }
+
+      const orderedItem = trimmed.match(/^\d+\.\s+(.+)$/);
+      if (orderedItem) {
+        closeParagraph();
+        closeBlockquote();
+        if (listType !== "ol") {
+          closeList();
+          listType = "ol";
+          html += "<ol>";
+        }
+        html += `<li>${formatInlineText(orderedItem[1])}</li>`;
+        continue;
+      }
+
+      const unorderedItem = trimmed.match(/^[-*+]\s+(.+)$/);
+      if (unorderedItem) {
+        closeParagraph();
+        closeBlockquote();
+        if (listType !== "ul") {
+          closeList();
+          listType = "ul";
+          html += "<ul>";
+        }
+        html += `<li>${formatInlineText(unorderedItem[1])}</li>`;
+        continue;
+      }
+
+      closeList();
+      closeBlockquote();
+      paragraphLines.push(trimmed);
     }
-    
-    html += escapeHtml(text.slice(lastIndex)).replaceAll("\n", "<br>");
+
+    closeParagraph();
+    closeList();
+    closeBlockquote();
     return html;
+}
+
+function sanitizeMarkdownUrl(url) {
+  const normalized = String(url || "").trim();
+  if (!normalized) return "#";
+  if (/^(https?:|mailto:)/i.test(normalized)) return normalized;
+  return "#";
+}
+
+function formatInlineText(text) {
+  let output = escapeHtml(String(text || ""));
+  const inlineCodeTokens = [];
+
+  output = output.replace(/`([^`]+)`/g, (_, code) => {
+    const token = `@@INLINE_CODE_${inlineCodeTokens.length}@@`;
+    inlineCodeTokens.push(`<code class="inline-code">${code}</code>`);
+    return token;
+  });
+
+  output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const safeUrl = escapeHtml(sanitizeMarkdownUrl(url));
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+
+  output = output.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  output = output.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+  output = output.replace(/(^|[^\*])\*([^*]+)\*/g, "$1<em>$2</em>");
+  output = output.replace(/(^|[^_])_([^_]+)_/g, "$1<em>$2</em>");
+  output = output.replace(/\n/g, "<br>");
+
+  output = output.replace(/@@INLINE_CODE_(\d+)@@/g, (_, idx) => {
+    return inlineCodeTokens[Number(idx)] || "";
+  });
+
+  return output;
 }
 
 function enableCopyButtons(container) {
@@ -1632,6 +1818,32 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
     const span = document.createElement("span");
     element.appendChild(span);
     await typePlainText(span, rest);
+  }
+}
+
+async function typeRichMarkdown(element, fullText, textSpeed = 12) {
+  const text = String(fullText || "");
+  let buffer = "";
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    buffer += ch;
+
+    // Render every 2 chars for smoother animation without heavy reflow.
+    if (i % 2 === 0 || i === text.length - 1) {
+      element.innerHTML = parseFencedBlocks(buffer);
+      if (window.Prism) Prism.highlightAllUnder(element);
+      const chatbox = document.querySelector(".chatbox");
+      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    let delay = textSpeed;
+    if (ch === "\n") delay = Math.max(20, textSpeed + 8);
+    else if (ch === "." || ch === "!" || ch === "?")
+      delay = Math.max(45, textSpeed + 35);
+    else if (ch === "," || ch === ";") delay = Math.max(30, textSpeed + 18);
+
+    await new Promise((r) => setTimeout(r, delay));
   }
 }
 

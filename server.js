@@ -111,7 +111,6 @@ function sessionMessagesKey(userId, chatId) {
   return `chat_${userId}_${chatId}`;
 }
 
-
 function makeChatId() {
   return (
     "c_" +
@@ -140,6 +139,17 @@ function getOptimizedParams(message) {
     timeout: isCodeHeavy ? 60000 : 30000,
     historyLimit: isCodeHeavy ? 8 : 12,
   };
+}
+
+function isTextLikeMime(mimeType) {
+  const mime = String(mimeType || "").toLowerCase();
+  return (
+    mime.startsWith("text/") ||
+    mime.includes("json") ||
+    mime.includes("csv") ||
+    mime.includes("xml") ||
+    mime.includes("javascript")
+  );
 }
 
 async function supabaseAuthRequired(req, res, next) {
@@ -333,7 +343,9 @@ async function forceCleanChat(userId, chatId) {
     const raw = await db.get(key);
     const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
 
-    console.log(`ðŸ§¨ Force cleaning chat ${chatId}: ${history.length} messages`);
+    console.log(
+      `ðŸ§¨ Force cleaning chat ${chatId}: ${history.length} messages`,
+    );
 
     const recentHistory = history.slice(-20);
 
@@ -517,7 +529,8 @@ app.get("/chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
 
 async function analyzeMediaHandler(req, res) {
   const userId = req.auth?.sub;
-  const { prompt, mediaData, imageData, mediaName, mediaType, chatId } = req.body || {};
+  const { prompt, mediaData, imageData, mediaName, mediaType, chatId } =
+    req.body || {};
   const activeChatId = chatId || "default";
   const uploadData = mediaData || imageData;
 
@@ -529,11 +542,20 @@ async function analyzeMediaHandler(req, res) {
   const userPrompt = String(prompt || defaultPrompt).trim() || defaultPrompt;
 
   try {
+    const openRouterKeyPreview = process.env.OPENROUTER_API_KEY
+      ? `${process.env.OPENROUTER_API_KEY.slice(0, 10)}...${process.env.OPENROUTER_API_KEY.slice(-4)}`
+      : "MISSING";
+    console.log(
+      `[KEY CHECK] route=/analyze-media provider=OPENROUTER key=${openRouterKeyPreview} chatId=${activeChatId}`,
+    );
+
     if (activeChatId !== "default") {
       await ensureSession(userId, activeChatId);
     }
 
-    const dataUrlMatch = uploadData.match(/^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    const dataUrlMatch = uploadData.match(
+      /^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,(.+)$/,
+    );
     if (!dataUrlMatch) {
       return res.status(400).json({ error: "Invalid media format" });
     }
@@ -555,13 +577,39 @@ async function analyzeMediaHandler(req, res) {
         type: "image_url",
         image_url: { url: uploadData },
       });
-    } else {
+    } else if (mimeType === "application/pdf") {
       userParts.push({
         type: "file",
         file: {
           filename: safeMediaName,
           file_data: uploadData,
         },
+      });
+    } else if (isTextLikeMime(mimeType)) {
+      // For text-like uploads, inline text is more reliable than file upload.
+      let decodedText = "";
+      try {
+        decodedText = Buffer.from(base64Data, "base64").toString("utf8");
+      } catch (err) {
+        decodedText = "";
+      }
+
+      if (!decodedText.trim()) {
+        return res.status(200).json({
+          reply:
+            "This text file could not be decoded. Try uploading UTF-8 text, or convert it to PDF.",
+        });
+      }
+
+      const clipped = decodedText.slice(0, 20000);
+      userParts.push({
+        type: "text",
+        text: `File: ${safeMediaName}\n\n${clipped}`,
+      });
+    } else {
+      return res.status(200).json({
+        reply:
+          "This file type is not supported yet for direct analysis. Please convert it to PDF, TXT, CSV, or image and upload again.",
       });
     }
 
@@ -576,9 +624,13 @@ async function analyzeMediaHandler(req, res) {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "qwen/qwen2.5-vl-32b-instruct",
+          model: "meta-llama/llama-3.2-11b-vision-instruct",
           messages: [
-            { role: "system", content: "You analyze uploaded media and answer clearly and accurately." },
+            {
+              role: "system",
+              content:
+                "You analyze uploaded media and answer clearly and accurately.",
+            },
             { role: "user", content: userParts },
           ],
           temperature: 0.3,
@@ -589,7 +641,11 @@ async function analyzeMediaHandler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Media analyze API error:", response.status, errorText.slice(0, 300));
+      console.error(
+        "Media analyze API error:",
+        response.status,
+        errorText.slice(0, 300),
+      );
       if (response.status === 402) {
         return res.status(200).json({
           reply:
@@ -603,10 +659,14 @@ async function analyzeMediaHandler(req, res) {
 
     const data = await response.json();
     const reply =
-      data?.choices?.[0]?.message?.content ||
-      "I could not analyze this file.";
+      data?.choices?.[0]?.message?.content || "I could not analyze this file.";
 
-    await saveMessage(userId, "user", `[Media: ${mimeType}] ${userPrompt}`, activeChatId);
+    await saveMessage(
+      userId,
+      "user",
+      `[Media: ${mimeType}] ${userPrompt}`,
+      activeChatId,
+    );
     await saveMessage(userId, "assistant", reply, activeChatId);
 
     const history = await getChatHistory(userId, activeChatId);
@@ -654,6 +714,13 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
   }
 
   try {
+    const sarvamKeyPreview = process.env.SARVAM_API_KEY
+      ? `${process.env.SARVAM_API_KEY.slice(0, 10)}...${process.env.SARVAM_API_KEY.slice(-4)}`
+      : "MISSING";
+    console.log(
+      `[KEY CHECK] route=/chat provider=SARVAM key=${sarvamKeyPreview} chatId=${activeChatId}`,
+    );
+
     const sanitizedMessage = message.trim();
     const optimizedParams = getOptimizedParams(sanitizedMessage);
 
@@ -837,20 +904,24 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
 // CLEANUP ENDPOINTS
 // ============================================================
 
-app.post("/clean-chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
-  const userId = req.auth?.sub;
-  const { chatId } = req.params;
-  try {
-    const cleaned = await forceCleanChat(userId, chatId);
-    res.json({
-      success: true,
-      message: `Chat cleaned to ${cleaned.length} messages`,
-      cleanedCount: cleaned.length,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.post(
+  "/clean-chat/:userId/:chatId",
+  supabaseAuthRequired,
+  async (req, res) => {
+    const userId = req.auth?.sub;
+    const { chatId } = req.params;
+    try {
+      const cleaned = await forceCleanChat(userId, chatId);
+      res.json({
+        success: true,
+        message: `Chat cleaned to ${cleaned.length} messages`,
+        cleanedCount: cleaned.length,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // ============================================================
 // DELETE ENDPOINTS
@@ -926,55 +997,63 @@ app.delete("/chats/:userId", supabaseAuthRequired, async (req, res) => {
   }
 });
 
-app.get("/check-delete/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
-  const userId = req.auth?.sub;
-  const { chatId } = req.params;
-  try {
-    const messagesKey = sessionMessagesKey(userId, chatId);
-    const messages = await db.get(messagesKey);
-    const sessions = await listSessions(userId);
-    const sessionExists = sessions.some((s) => s.chatId === chatId);
-    res.json({
-      chatId,
-      messagesExist: messages !== null,
-      sessionExists,
-      sessionsCount: sessions.length,
-    });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
-
-app.get("/chat-stats/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
-  const userId = req.auth?.sub;
-  const { chatId } = req.params;
-  try {
-    const key = sessionMessagesKey(userId, chatId);
-    const raw = await db.get(key);
-    const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
-
-    let duplicateCount = 0;
-    for (let i = 1; i < history.length; i++) {
-      if (
-        history[i].role === history[i - 1].role &&
-        history[i].message === history[i - 1].message
-      ) {
-        duplicateCount++;
-      }
+app.get(
+  "/check-delete/:userId/:chatId",
+  supabaseAuthRequired,
+  async (req, res) => {
+    const userId = req.auth?.sub;
+    const { chatId } = req.params;
+    try {
+      const messagesKey = sessionMessagesKey(userId, chatId);
+      const messages = await db.get(messagesKey);
+      const sessions = await listSessions(userId);
+      const sessionExists = sessions.some((s) => s.chatId === chatId);
+      res.json({
+        chatId,
+        messagesExist: messages !== null,
+        sessionExists,
+        sessionsCount: sessions.length,
+      });
+    } catch (err) {
+      res.json({ error: err.message });
     }
+  },
+);
 
-    res.json({
-      totalMessages: history.length,
-      duplicateCount,
-      needsCleaning:
-        history.length > AUTO_CLEAN_THRESHOLD || duplicateCount > 0,
-      autoCleanThreshold: AUTO_CLEAN_THRESHOLD,
-      maxLimit: MAX_HISTORY_LENGTH,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get(
+  "/chat-stats/:userId/:chatId",
+  supabaseAuthRequired,
+  async (req, res) => {
+    const userId = req.auth?.sub;
+    const { chatId } = req.params;
+    try {
+      const key = sessionMessagesKey(userId, chatId);
+      const raw = await db.get(key);
+      const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
+
+      let duplicateCount = 0;
+      for (let i = 1; i < history.length; i++) {
+        if (
+          history[i].role === history[i - 1].role &&
+          history[i].message === history[i - 1].message
+        ) {
+          duplicateCount++;
+        }
+      }
+
+      res.json({
+        totalMessages: history.length,
+        duplicateCount,
+        needsCleaning:
+          history.length > AUTO_CLEAN_THRESHOLD || duplicateCount > 0,
+        autoCleanThreshold: AUTO_CLEAN_THRESHOLD,
+        maxLimit: MAX_HISTORY_LENGTH,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // auth
 
@@ -1138,9 +1217,3 @@ process.on("SIGINT", () => {
   console.log("\nðŸ›‘ Shutting down...");
   process.exit(0);
 });
-
-
-
-
-
-
