@@ -98,49 +98,6 @@ html, body {
   position: relative;
 }
 
-.welcome {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: var(--text-muted);
-  font-size: var(--font-3xl);
-  font-weight: var(--font-weight-semibold);
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-  z-index: 10;
-}
-
-.welcomes {
-  position: static;
-  display: flex;
-  justify-content: center;
-  gap: 5px;
-  margin-bottom: var(--space-md);
-}
-
-.welcomes span {
-  opacity: 0;
-  display: inline-block;
-  animation: revealText 4s steps(5) forwards;
-  animation-delay: 0s;
-}
-
-.welcomes span:nth-child(1) { animation-delay: 0.5s; }
-.welcomes span:nth-child(2) { animation-delay: 1s; }
-.welcomes span:nth-child(3) { animation-delay: 1.5s; }
-.welcomes span:nth-child(4) { animation-delay: 2s; }
-.welcomes span:nth-child(5) { animation-delay: 2.5s; }
-
-.welcome p1 {
-  font-size: var(--font-base);
-  color: var(--text-secondary);
-}
-
-@media (max-width: 991px) { .welcome { font-size: var(--font-2xl); } }
-@media (max-width: 780px) { .welcome { font-size: var(--font-xl); } }
-@media (max-width: 575px) { .welcome { font-size: var(--font-lg); } }
-
 /* ================= THEME TOGGLE BUTTON (FIXED POSITION) ================= */
 #mode-toggle {
   position: fixed !important;
@@ -1073,41 +1030,12 @@ body.light-mode .new-chat-btn {
 }
 
 @media (max-width: 480px) {
-  /* Theme toggle - positioned right next to sidebar toggle */
-  #mode-toggle {
-    left: 64px !important; /* 16px (original) + 44px (button width) + 4px (gap) */
-    right: auto !important;
-    top: 16px !important;
-  }
-  
-  /* Sidebar toggle stays on left */
-  #sidebar-toggle {
-    left: 16px !important;
-    right: auto !important;
-    top: 16px !important;
-  }
-  
-  /* Close button stays on far right */
+  /* Keep close button aligned if shown anywhere */
   .chatbot header .close-btn {
     right: 16px !important;
     top: 16px !important;
     left: auto !important;
   }
-}@media (max-width: 480px) {
-  /* Theme toggle - positioned right next to sidebar toggle */
-  #mode-toggle {
-    left: 64px !important; /* 16px (original) + 44px (button width) + 4px (gap) */
-    right: auto !important;
-    top: 16px !important;
-  }
-  
-  /* Sidebar toggle stays on left */
-  #sidebar-toggle {
-    left: 16px !important;
-    right: auto !important;
-    top: 16px !important;
-  }
-  
 }
 
 /* ================= CLOSE SIDEBAR BUTTON ================= */
@@ -1314,81 +1242,75 @@ body.light-mode .history-list .error {
 }
 /* ================= MOBILE HEADER FINAL (NO ERRORS) ================= */
 @media (max-width: 480px) {
-  :root { --safe-top: 18px; } /* change 12/18/24 if needed */
-
-  /* Header: one row, no border line */
-  .chatbot header {
+  /* Match mobile positioning with app-view layout */
+  body.chat-started .chatbot header {
     position: sticky !important;
     top: 0 !important;
     z-index: 999 !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-
-    padding: calc(12px + var(--safe-top)) 12px 12px !important;
-
-    background: var(--secondary-bg) !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
+    height: 72px !important;
+    padding-top: 18px !important;
+    padding-bottom: 8px !important;
+    display: block !important;
   }
 
-  /* LEFT: Menu button (no background) */
-  body.chat-started #sidebar-toggle {
-    position: static !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    width: 44px !important;
-    height: 44px !important;
-
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
-    z-index: 1000 !important;
+  body.chat-started .chatbot header #sidebar-toggle {
+    position: absolute !important;
+    left: 12px !important;
+    bottom: 8px !important;
+    top: auto !important;
   }
 
-  /* CENTER: Genie title (perfect center, slightly down) */
-  .chatbot header h2 {
+  body.chat-started .chatbot header h2 {
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    bottom: 14px !important;
+    top: auto !important;
     margin: 0 !important;
-    flex: 1 !important;
+    width: auto !important;
+    max-width: 60% !important;
     text-align: center !important;
-
-    position: relative !important;
-    top: 2px !important; /* Genie little down */
-
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
   }
 
-  /* RIGHT: Mode button (always visible, no background) */
-  #mode-toggle {
-    position: static !important;
+  body.chat-started .chatbot header #mode-toggle {
+    position: absolute !important;
+    right: 12px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
 
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+  body.chat-started .chatbot header #auth-btn {
+    position: absolute !important;
+    right: 58px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
 
-    width: 44px !important;
-    height: 44px !important;
+  body.chat-started .chatbot header #close-chatbot {
+    display: none !important;
+  }
+}
 
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
+/* Desktop: hide sidebar close button */
+@media (min-width: 481px) {
+  .history-sidebar .close-sidebar-btn,
+  #close-sidebar {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
 
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
-    z-index: 1000 !important;
+/* Mobile: hide download buttons */
+@media (max-width: 480px) {
+  #download-app-btn,
+  #apk-download-header,
+  .apk-download-btn {
+    display: none !important;
   }
 }
 /* ================= MOBILE: HISTORY HEADER DOWN (SAFE TOP) ================= */
@@ -1412,95 +1334,6 @@ body.light-mode .history-list .error {
   }
 }
 
-/* Download App – similar size to Chat with Genie */
-.download-app-btn{
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: 8px 16px;        /* ⬅ close to Chat with Genie */
-  font-size: 14px;          /* ⬅ readable, not bulky */
-  font-weight: 600;
-
-  border-radius: 12px;
-  background: var(--gradient-primary);
-  color: #ffffff;
-  text-decoration: none;
-
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.download-app-btn:hover{
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-lg);
-}
-
-.download-app-btn:active{
-  transform: scale(0.98);
-}
-@media (max-width: 480px) {
-  .download-app-btn{
-    padding: 7px 14px;
-    font-size: 13px;
-  }
-}
-
-/* ================= WELCOME BUTTON LAYOUT (FINAL FIX) ================= */
-
-/* Container that holds both buttons */
-.welcome-actions{
-  display: flex;
-  justify-content: center;
-  align-items: center;        /* ✅ same line vertically */
-  gap: 16px;                  /* ✅ gap between buttons */
-  margin-top: 20px;
-  flex-wrap: nowrap;          /* ✅ prevent wrapping on desktop/webview */
-}
-
-/* Force BOTH buttons to look identical */
-.welcome-actions .start-chat-btn,
-.welcome-actions .download-app-btn{
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-
-  height: 44px !important;          /* ✅ same height */
-  min-width: 190px !important;      /* ✅ same width */
-  padding: 0 18px !important;       /* ✅ same horizontal padding */
-
-  font-size: 14px !important;
-  font-weight: 600 !important;
-
-  line-height: 44px !important;     /* ✅ fixes WebView baseline issue */
-  border-radius: 12px !important;
-  box-sizing: border-box !important;
-
-  white-space: nowrap !important;
-  margin: 0 !important;             /* ✅ remove default button/a margins */
-}
-
-/* Make <a> behave like button */
-.welcome-actions .download-app-btn{
-  text-decoration: none !important;
-  border: none !important;
-}
-
-/* Mobile layout: stack buttons vertically */
-@media (max-width: 480px){
-  .welcome-actions{
-    flex-direction: column;          /* ✅ up-down */
-    gap: 14px;
-  }
-
-  .welcome-actions .start-chat-btn,
-  .welcome-actions .download-app-btn{
-    width: 100% !important;
-    max-width: 260px !important;
-  }
-}
 /* ================= HEADER APK DOWNLOAD BUTTON ================= */
 
 /* ================= HEADER GRID ================= */
@@ -1673,21 +1506,53 @@ body.in-app .apk-download-btn{
 
 /* ================= APP VIEW (WebView): PUSH HEADER DOWN ================= */
 body.app-view .chatbot header{
-  padding-top: 14px !important;     /* change 10/12/14/16 */
-  height: calc(56px + 14px) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 999 !important;
+  height: 72px !important;
+  padding-top: 18px !important;
+  padding-bottom: 8px !important;
+  display: block !important;
 }
 
-/* keep title + buttons aligned vertically */
-body.app-view .chatbot header > *{
-  align-self: center;
-}
-body.app-view .chat-header{
-  padding-top: 14px !important;
-  height: calc(56px + 14px) !important;
+body.app-view .chatbot header #sidebar-toggle{
+  position: absolute !important;
+  left: 12px !important;
+  bottom: 8px !important;
+  top: auto !important;
 }
 
-body.app-view .chat-header > *{
-  align-self: center;
+body.app-view .chatbot header h2{
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  bottom: 14px !important;
+  top: auto !important;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: 60% !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body.app-view .chatbot header #mode-toggle{
+  position: absolute !important;
+  right: 12px !important;
+  bottom: 8px !important;
+  top: auto !important;
+}
+
+body.app-view .chatbot header #auth-btn{
+  position: absolute !important;
+  right: 58px !important;
+  bottom: 8px !important;
+  top: auto !important;
+}
+
+body.app-view .chatbot header #close-chatbot{
+  display: none !important;
 }
 body.app-view #download-app-btn,
 body.app-view .apk-download-btn{
@@ -1741,14 +1606,14 @@ body.app-view .auth-header-btn{
   /* Mode toggle bottom-right */
   body.app-view .chatbot header #mode-toggle{
     position: absolute !important;
-    right: 65px !important;
+    right: 12px !important;
     bottom: 8px !important;
     top: auto !important;
   }
 
   body.app-view .chatbot header #auth-btn{
     position: absolute !important;
-    right: 54px !important;
+    right: 58px !important;
     bottom: 8px !important;
     top: auto !important;
   }
@@ -1756,6 +1621,24 @@ body.app-view .auth-header-btn{
   /* If close btn exists, keep it hidden or place it too */
   body.app-view .chatbot header #close-chatbot{
     display: none !important;
+  }
+}
+
+/* Final lock: mode toggle must stay at far-right on mobile + app-view */
+@media (max-width: 480px) {
+  body.chat-started .chatbot header #mode-toggle,
+  body.app-view .chatbot header #mode-toggle {
+    position: absolute !important;
+    right: 12px !important;
+    left: auto !important;
+    top: auto !important;
+    bottom: 8px !important;
+  }
+
+  body.chat-started .chatbot header #auth-btn,
+  body.app-view .chatbot header #auth-btn {
+    right: 58px !important;
+    left: auto !important;
   }
 }
 
@@ -1819,7 +1702,7 @@ body.app-view.light-mode .chatbox .outgoing p {
 
 /* ================= DESKTOP NORMAL MODE: AUTH LEFT OF MODE TOGGLE ================= */
 @media (min-width: 481px) {
-  body:not(.app-view) .chatbot header #auth-btn {
+body:not(.app-view) .chatbot header #auth-btn {
     position: fixed !important;
     top: 20px !important;
     right: 64px !important;

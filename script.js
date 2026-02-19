@@ -152,14 +152,12 @@ async function handleLogout() {
       }
     });
     
-    // Reset UI
+    // Reset UI but keep main chat layout (no welcome flow)
     if (chatbox) chatbox.innerHTML = '';
-    if (welcome) {
-      welcome.style.display = 'block';
-      container.style.display = 'none';
-    }
-    
-    document.body.classList.remove('chat-started', 'show-chatbot', 'show-history');
+    document.body.classList.add('chat-started', 'show-chatbot');
+    if (container) container.style.display = 'block';
+    if (welcome) welcome.style.display = 'none';
+    if (window.innerWidth > 480) document.body.classList.add('show-history');
     
     // Update button back to login
     await updateAuthButton();
@@ -294,7 +292,7 @@ function markAppView() {
 async function initializeApp() {
   console.log("🚀 Initializing app...");
 
-  // 1) Always show welcome first
+  // 1) Start directly on main chat page
   initUIState();
 
   // 2) User - ✅ FIXED with await
@@ -312,40 +310,35 @@ async function initializeApp() {
   // 5) Backend check
   testBackendConnection().catch(console.error);
 
-  // 6) Preload last chat
-  if (activeChatId && chatbox) {
-    try {
-      await loadChatFromServer(activeChatId);
-    } catch (e) {
-      console.warn("⚠️ Could not preload last chat:", e);
-    }
-  }
+  // 6) Ensure chat + sessions are ready on first load
+  await ensureActiveChat();
 
   console.log("✅ App initialized");
 }
-
-
 // ================= CORE FUNCTIONS =================
 
 // 1. USER MANAGEMENT
 
 
 function initUIState() {
-  // ALWAYS start on welcome screen
-  document.body.classList.remove("chat-started", "show-chatbot", "show-history");
+  // Always open main chat layout
+  document.body.classList.add("chat-started", "show-chatbot");
+  if (window.innerWidth > 480) {
+    document.body.classList.add("show-history");
+  } else {
+    document.body.classList.remove("show-history");
+  }
 
-  if (welcome) welcome.style.display = "block";
-  if (container) container.style.display = "none";
+  if (welcome) welcome.style.display = "none";
+  if (container) container.style.display = "block";
 
-  // Sidebar MUST be hidden on welcome (remove inline overrides too)
+  // Reset sidebar inline overrides from old welcome flow
   if (historySidebar) {
     historySidebar.classList.remove("active");
-    historySidebar.style.display = "";     // remove forced "block/none"
-    historySidebar.style.transform = "";   // remove forced translate
+    historySidebar.style.display = "";
+    historySidebar.style.transform = "";
   }
 }
-
-
 // 3. THEME MANAGEMENT
 function initTheme() {
     if (!modeToggle || !modeIcon) return;
@@ -403,10 +396,12 @@ function initEventListeners() {
     // Close chatbot
     if (closeBtn) {
         closeBtn.addEventListener("click", () => {
-            document.body.classList.remove("chat-started", "show-chatbot");
-            if (historySidebar) historySidebar.classList.remove("active");
-            if (container) container.style.display = "none";
-            if (welcome) welcome.style.display = "block";
+            // Keep app on main chat page; only close sidebar on mobile
+            if (historySidebar && window.innerWidth <= 480) {
+                historySidebar.classList.remove("active");
+                historySidebar.style.display = "none";
+                historySidebar.style.transform = "translateX(-100%)";
+            }
         });
     }
     
@@ -1399,4 +1394,5 @@ function setupDownloadAppButton() {
 
 console.log("Loaded from:", location.href);
 console.log("Script version: v12");
+
 
