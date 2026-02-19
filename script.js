@@ -1,4 +1,4 @@
-
+﻿
 
 // ================= DOM ELEMENTS =================
 const chatbotToggler = document.querySelector(".chatbot-toggler");
@@ -19,21 +19,131 @@ const modeToggle = document.getElementById("mode-toggle");
 const modeIcon = modeToggle?.querySelector(".material-symbols-outlined");
 const micBtn = document.getElementById("mic-btn");
 const authBtn = document.getElementById("auth-btn");
+const imageUploadInput = document.getElementById("image-upload");
+const selectedMediaPreview = document.getElementById("selected-media-preview");
+
+let pendingImageData = null;
+let pendingImageName = "";
+let pendingMediaType = "";
+let pendingMediaPreviewHref = null;
+
+const SUPPORTED_MEDIA_MIME_TYPES = new Set([
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "application/json",
+  "text/csv",
+  "application/rtf",
+  "application/xml",
+  "text/xml",
+  "text/html",
+  "text/css",
+  "application/javascript",
+  "text/javascript",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
+
+function isSupportedMediaFile(file) {
+  if (!file) return false;
+  const mime = String(file.type || "").toLowerCase();
+  if (mime.startsWith("image/")) return true;
+  if (mime.startsWith("text/")) return true;
+  if (SUPPORTED_MEDIA_MIME_TYPES.has(mime)) return true;
+
+  // Fallback for browsers that omit MIME for some files
+  const name = String(file.name || "").toLowerCase();
+  return [
+    ".pdf", ".txt", ".md", ".json", ".csv", ".doc", ".docx",
+    ".xls", ".xlsx", ".ppt", ".pptx", ".rtf", ".xml",
+    ".html", ".css", ".js", ".ts", ".py", ".java", ".c", ".cpp",
+  ].some((ext) => name.endsWith(ext));
+}
+
+function isImageDataUrl(dataUrl) {
+  return /^data:image\//i.test(String(dataUrl || ""));
+}
+
+function getMediaKindLabel(mimeType = "", dataUrl = "") {
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime.startsWith("image/") || isImageDataUrl(dataUrl)) return "image";
+  if (mime.includes("pdf")) return "PDF document";
+  if (mime.includes("excel") || mime.includes("spreadsheet")) return "spreadsheet";
+  if (mime.includes("powerpoint") || mime.includes("presentation")) return "presentation";
+  if (mime.startsWith("text/") || mime.includes("json") || mime.includes("csv")) return "text document";
+  if (mime.includes("word") || mime.includes("officedocument")) return "document";
+  return "file";
+}
+
+function clearSelectedMediaPreview() {
+  if (!selectedMediaPreview) return;
+  selectedMediaPreview.innerHTML = "";
+  selectedMediaPreview.style.display = "none";
+}
+
+function revokePendingMediaPreviewHref() {
+  if (!pendingMediaPreviewHref) return;
+  try {
+    URL.revokeObjectURL(pendingMediaPreviewHref);
+  } catch {}
+  pendingMediaPreviewHref = null;
+}
+
+function renderSelectedMediaPreview({ mediaData, mediaName, mediaType, previewHref = "" }) {
+  if (!selectedMediaPreview) return;
+  const safeName = escapeHtml(mediaName || "file");
+  const kindLabel = escapeHtml(getMediaKindLabel(mediaType, mediaData));
+  const isImage = isImageDataUrl(mediaData);
+  const href = escapeHtml(previewHref || mediaData || "#");
+
+  selectedMediaPreview.innerHTML = `
+    <div class="selected-media-chip">
+      <a href="${href}" target="_blank" rel="noopener noreferrer" class="${isImage ? "selected-media-thumb-link" : "selected-media-doc-link"}">
+        ${
+          isImage
+            ? `<img src="${mediaData}" alt="${safeName}" class="selected-media-thumb" />`
+            : `<span class="selected-media-doc material-symbols-outlined">description</span>`
+        }
+      </a>
+      <div class="selected-media-text">
+        <a href="${href}" target="_blank" rel="noopener noreferrer" class="selected-media-name-link">${safeName}</a>
+        <div class="selected-media-kind">${kindLabel}</div>
+      </div>
+      <button type="button" class="selected-media-remove material-symbols-outlined" title="Remove">close</button>
+    </div>
+  `;
+  selectedMediaPreview.style.display = "block";
+
+  const removeBtn = selectedMediaPreview.querySelector(".selected-media-remove");
+  removeBtn?.addEventListener("click", () => {
+    pendingImageData = null;
+    pendingImageName = "";
+    pendingMediaType = "";
+    if (imageUploadInput) imageUploadInput.value = "";
+    revokePendingMediaPreviewHref();
+    if (chatInput) chatInput.placeholder = "Ask anything with GENIE...";
+    clearSelectedMediaPreview();
+  });
+}
 
 
 // ================= DOM ELEMENTS =================
 // ... (keep all your DOM element declarations as is)
 
 // ================= SUPABASE AUTH =================
-// 🔴 REPLACE WITH YOUR ACTUAL VALUES
+// ðŸ”´ REPLACE WITH YOUR ACTUAL VALUES
 // ================= SUPABASE AUTH =================
-// ✅ Use the ONE global client created in index.html
+// âœ… Use the ONE global client created in index.html
 const supabaseClient = window.supabaseClient || null;
 
 // small helper to avoid crashes
 function ensureSupabase() {
   if (!supabaseClient) {
-    console.warn("❌ supabaseClient not found. Did you init it in index.html?");
+    console.warn("âŒ supabaseClient not found. Did you init it in index.html?");
     return false;
   }
   return true;
@@ -53,7 +163,7 @@ async function getSession() {
   return session;
 }
 
-// ✅ SINGLE getUserId function (KEEP THIS ONE, DELETE THE OTHER)
+// âœ… SINGLE getUserId function (KEEP THIS ONE, DELETE THE OTHER)
 async function getUserId() {
   // Use only authenticated Supabase user
   const user = await getCurrentUser();
@@ -96,7 +206,7 @@ async function updateAuthButton() {
       <span class="auth-text">${displayName}</span>
     `;
 
-    // ✅ CHANGE: go to auth page instead of logout confirm
+    // âœ… CHANGE: go to auth page instead of logout confirm
     newBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -121,7 +231,7 @@ async function updateAuthButton() {
 // Handle logout process
 async function handleLogout() {
   try {
-    console.log('🚪 Logging out...');
+    console.log('ðŸšª Logging out...');
     
     // Show loading state
     const authBtn = document.getElementById('auth-btn');
@@ -157,11 +267,11 @@ async function handleLogout() {
     await updateAuthButton();
     
     // Show success message
-    alert('✅ Logged out successfully!');
+    alert('âœ… Logged out successfully!');
     
   } catch (error) {
-    console.error('❌ Logout error:', error);
-    alert('❌ Failed to logout');
+    console.error('âŒ Logout error:', error);
+    alert('âŒ Failed to logout');
     await updateAuthButton();
   }
 }
@@ -272,9 +382,9 @@ let speechRecognition = null;
 let voices = [];
 
 // ================= INITIALIZATION =================
-// ✅ SINGLE DOMContentLoaded handler
+// âœ… SINGLE DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Initializing app...");
+  console.log("ðŸš€ Initializing app...");
   
   // Update auth button first
   await updateAuthButton();
@@ -295,24 +405,24 @@ function markAppView() {
   
   if (isWebView) {
     document.body.classList.add("app-view");
-    console.log("📱 App view detected");
+    console.log("ðŸ“± App view detected");
   }
 }
 
 async function initializeApp() {
-  console.log("🚀 Initializing app...");
+  console.log("ðŸš€ Initializing app...");
 
   // 1) Start directly on main chat page
   initUIState();
 
-  // 2) User - ✅ FIXED with await
+  // 2) User - âœ… FIXED with await
   const userId = await getUserId();
   if (!userId) {
     console.warn("No authenticated session found. Redirecting to auth page...");
     window.location.href = "./auth.html";
     return;
   }
-  console.log("👤 User ID:", userId);
+  console.log("ðŸ‘¤ User ID:", userId);
 
   // 3) Theme + speech + mic
   initTheme();
@@ -328,7 +438,7 @@ async function initializeApp() {
   // 6) Ensure chat + sessions are ready on first load
   await ensureActiveChat();
 
-  console.log("✅ App initialized");
+  console.log("âœ… App initialized");
 }
 // ================= CORE FUNCTIONS =================
 
@@ -380,7 +490,7 @@ function initTheme() {
 }
 // 4. EVENT LISTENERS
 function initEventListeners() {
-    // 🔴 COMMENT OUT THIS OLD AUTH HANDLER - It's conflicting!
+    // ðŸ”´ COMMENT OUT THIS OLD AUTH HANDLER - It's conflicting!
     // if (authBtn) {
     //     authBtn.addEventListener("click", () => {
     //         const authPath = "./auth.html";
@@ -424,10 +534,10 @@ function initEventListeners() {
     if (sidebarToggle) {
         sidebarToggle.addEventListener("click", (e) => {
             e.stopPropagation();
-            console.log("📱 Sidebar toggle clicked");
+            console.log("ðŸ“± Sidebar toggle clicked");
             
             if (!historySidebar) {
-                console.error("❌ History sidebar not found!");
+                console.error("âŒ History sidebar not found!");
                 return;
             }
             
@@ -436,7 +546,7 @@ function initEventListeners() {
             if (isMobile) {
                 // Mobile: toggle active class
                 historySidebar.classList.toggle("active");
-                console.log("📱 Sidebar active:", historySidebar.classList.contains("active"));
+                console.log("ðŸ“± Sidebar active:", historySidebar.classList.contains("active"));
                 
                 // Show/hide with display property for mobile
                 if (historySidebar.classList.contains("active")) {
@@ -467,6 +577,46 @@ function initEventListeners() {
             await deleteAllChats();
         });
     }
+
+    if (imageUploadInput) {
+        imageUploadInput.addEventListener("change", async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (!isSupportedMediaFile(file)) {
+                alert("Please select an image or supported document.");
+                return;
+            }
+
+            revokePendingMediaPreviewHref();
+            pendingMediaPreviewHref = URL.createObjectURL(file);
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                pendingImageData = String(reader.result || "");
+                pendingImageName = file.name || "image";
+                pendingMediaType = String(file.type || "");
+                renderSelectedMediaPreview({
+                    mediaData: pendingImageData,
+                    mediaName: pendingImageName,
+                    mediaType: pendingMediaType,
+                    previewHref: pendingMediaPreviewHref,
+                });
+
+                if (chatInput) {
+                    chatInput.placeholder = "Add prompt for selected file...";
+                    chatInput.focus();
+                }
+            };
+            reader.onerror = () => {
+                pendingImageData = null;
+                pendingImageName = "";
+                pendingMediaType = "";
+                revokePendingMediaPreviewHref();
+                alert("Failed to read file.");
+            };
+            reader.readAsDataURL(file);
+        });
+    }
     
     // Close sidebar when clicking outside (mobile only)
     document.addEventListener("click", (e) => {
@@ -488,7 +638,7 @@ function initEventListeners() {
 
 // 5. CHAT MANAGEMENT
 async function startChat() {
-    console.log("💬 Starting chat...");
+    console.log("ðŸ’¬ Starting chat...");
     
     // Update UI state
     document.body.classList.add("chat-started", "show-chatbot");
@@ -520,7 +670,7 @@ async function startChat() {
 }
 
 async function ensureActiveChat() {
-    const userId = await getUserId();  // ✅ Added await
+    const userId = await getUserId();  // âœ… Added await
     if (!userId) return;
     
     if (!activeChatId) {
@@ -536,7 +686,7 @@ async function ensureActiveChat() {
             activeChatId = data.chatId;
             localStorage.setItem("genie_activeChatId", activeChatId);
         } else {
-            console.error("❌ Failed to create new chat");
+            console.error("âŒ Failed to create new chat");
             return;
         }
     }
@@ -564,7 +714,7 @@ async function createNewChat() {
             await openSession(data.chatId);
         }
     } catch (error) {
-        console.error("❌ Error creating new chat:", error);
+        console.error("âŒ Error creating new chat:", error);
     }
 }
 
@@ -622,7 +772,7 @@ async function loadSessionsSidebar() {
             historyList.appendChild(li);
         });
     } catch (error) {
-        console.error("❌ Error loading sessions:", error);
+        console.error("âŒ Error loading sessions:", error);
         // Create styled error message
         const errorLi = document.createElement("li");
         errorLi.className = "error";
@@ -663,7 +813,7 @@ async function loadChatFromServer(chatId) {
         
         chatbox.scrollTo(0, chatbox.scrollHeight);
     } catch (error) {
-        console.error("❌ Error loading chat:", error);
+        console.error("âŒ Error loading chat:", error);
         // Create properly styled error message
         const errorLi = document.createElement("li");
         errorLi.className = "chat incoming error";
@@ -696,7 +846,7 @@ async function deleteSession(chatId) {
             await loadSessionsSidebar();
         }
     } catch (error) {
-        console.error("❌ Error deleting session:", error);
+        console.error("âŒ Error deleting session:", error);
     }
 }
 
@@ -715,29 +865,61 @@ async function deleteAllChats() {
         localStorage.removeItem("genie_activeChatId");
         await ensureActiveChat();
     } catch (error) {
-        console.error("❌ Error deleting all chats:", error);
+        console.error("âŒ Error deleting all chats:", error);
     }
 }
 
 // 6. MESSAGE HANDLING
 function handleChat() {
-    const userMessage = chatInput?.value.trim();
-    if (!userMessage || !chatInput) return;
+    const userMessage = chatInput?.value.trim() || "";
+    if (!chatInput) return;
+    if (!userMessage && !pendingImageData) return;
     
     // Clear input
     chatInput.value = "";
-    
+
+    const imageData = pendingImageData;
+    const imageName = pendingImageName;
+    const mediaType = pendingMediaType;
+    pendingImageData = null;
+    pendingImageName = "";
+    pendingMediaType = "";
+    revokePendingMediaPreviewHref();
+    if (imageUploadInput) imageUploadInput.value = "";
+    if (chatInput) chatInput.placeholder = "Ask anything with GENIE...";
+    clearSelectedMediaPreview();
+
     // Add user message to chatbox
-    chatbox.appendChild(createChatLi(userMessage, "outgoing"));
+    if (imageData && imageName) {
+        chatbox.appendChild(createOutgoingMediaLi({
+            mediaData: imageData,
+            mediaName: imageName,
+            mediaType,
+            mediaHref: imageData,
+            prompt: userMessage,
+        }));
+    } else {
+        chatbox.appendChild(createChatLi(userMessage, "outgoing"));
+    }
     chatbox.scrollTo(0, chatbox.scrollHeight);
     
     // Show typing indicator and generate response
     setTimeout(() => {
         const typingLi = showTypingIndicator();
-        generateResponse(typingLi, userMessage);
+        generateResponse(
+          typingLi,
+          userMessage,
+          imageData
+            ? {
+                mediaData: imageData,
+                mediaName: imageName,
+                mediaType,
+              }
+            : null,
+        );
     }, 600);
 }
-async function generateResponse(incomingChatli, userMessage) {
+async function generateResponse(incomingChatli, userMessage, mediaUpload = null) {
   const messageElement = convertTypingToMessage(incomingChatli);
   messageElement.innerHTML = "Thinking<span class='dots'></span>";
 
@@ -754,35 +936,61 @@ async function generateResponse(incomingChatli, userMessage) {
       return;
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const requestTimeoutMs = mediaUpload?.mediaData ? 120000 : 30000;
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    let responseText = "";
 
-    const response = await apiFetch(`${BACKEND_URL}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: userId,
-        chatId: activeChatId,
-        message: userMessage.trim(),
-      }),
-      signal: controller.signal,
-    });
+    if (mediaUpload?.mediaData) {
+      const response = await apiFetch(`${BACKEND_URL}/analyze-media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: userMessage.trim() || "Analyze this file in detail.",
+          mediaData: mediaUpload.mediaData,
+          mediaName: mediaUpload.mediaName || "file",
+          mediaType: mediaUpload.mediaType || "",
+          chatId: activeChatId,
+        }),
+        signal: controller.signal,
+      });
 
-    clearTimeout(timeout);
+      clearTimeout(timeout);
 
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      responseText = data.reply || "No response from AI.";
+    } else {
+      const response = await apiFetch(`${BACKEND_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: userId,
+          chatId: activeChatId,
+          message: userMessage.trim(),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      responseText = data.reply || "No response from AI.";
     }
 
-    const data = await response.json();
-    const responseText = data.reply || "No response from AI.";
-
-    // ✅ 1) TYPE the plain text (ChatGPT feel)
+    // âœ… 1) TYPE the plain text (ChatGPT feel)
     messageElement.innerHTML = "";
     const speed = responseText.length > 1200 ? 5 : 12;
 
     
 
-    // ✅ Typing effect (text + code typed inside block)
+    // âœ… Typing effect (text + code typed inside block)
 messageElement.innerHTML = "";
 
 const textSpeed = responseText.length > 1200 ? 6 : 12;
@@ -797,7 +1005,8 @@ ensureMsgActions(messageElement.closest(".bot-message-container"));
 
 
     // Save to conversation memory
-    conversationMemory.push({ role: "user", text: userMessage });
+    const userMemoryText = userMessage || (mediaUpload?.mediaName ? `[Media] ${mediaUpload.mediaName}` : "");
+    conversationMemory.push({ role: "user", text: userMemoryText });
     conversationMemory.push({
       role: "assistant",
       text: responseText.replace(/<[^>]*>/g, ""),
@@ -806,9 +1015,14 @@ ensureMsgActions(messageElement.closest(".bot-message-container"));
     // Update sidebar
     await loadSessionsSidebar();
   } catch (error) {
-    console.error("❌ Error generating response:", error);
-    messageElement.innerHTML = "❌ Failed to get response. Please try again.";
+    console.error("Error generating response:", error);
+    if (error?.name === "AbortError") {
+      messageElement.innerHTML = "Request timed out. Media analysis can take longer, please try again.";
+    } else {
+      messageElement.innerHTML = "Failed to get response. Please try again.";
+    }
   } finally {
+    clearTimeout(timeout);
     chatbox.scrollTo(0, chatbox.scrollHeight);
   }
 }
@@ -844,8 +1058,8 @@ async function handleSpecialCommands(messageElement, userMessage) {
         const cityName = weatherData.name;
         const country = weatherData.sys.country;
         
-        const weatherReply = `🌤️ Weather in ${cityName}, ${country}:<br>
-        Temperature: ${temp}°C (feels like ${feels_like}°C)<br>
+        const weatherReply = `ðŸŒ¤ï¸ Weather in ${cityName}, ${country}:<br>
+        Temperature: ${temp}Â°C (feels like ${feels_like}Â°C)<br>
         Condition: ${description}<br>
         Humidity: ${humidity}%<br>
         Wind Speed: ${windSpeed} m/s`;
@@ -857,7 +1071,7 @@ async function handleSpecialCommands(messageElement, userMessage) {
     // Clear memory command
     if (lowerMessage.includes("clear memory")) {
         conversationMemory = [];
-        messageElement.innerHTML = "🧠 Memory cleared.";
+        messageElement.innerHTML = "ðŸ§  Memory cleared.";
         return true;
     }
     
@@ -876,6 +1090,47 @@ async function fetchWeather(city) {
 }
 
 // 7. UI ELEMENTS CREATION
+function createOutgoingMediaLi({ mediaData, mediaName, mediaType, mediaHref = "", prompt }) {
+    const chatLi = document.createElement("li");
+    chatLi.classList.add("chat", "outgoing", "outgoing-media");
+
+    const safeName = escapeHtml(mediaName || "file");
+    const safePrompt = escapeHtml((prompt || "").trim());
+    const kindLabel = getMediaKindLabel(mediaType, mediaData);
+    const showImage = isImageDataUrl(mediaData);
+    const href = escapeHtml(mediaHref || mediaData || "#");
+
+    let html = `<div class="user-media-card">`;
+
+    if (showImage) {
+        html += `
+          <a href="${href}" target="_blank" rel="noopener noreferrer" class="user-media-open-link">
+            <img src="${mediaData}" alt="${safeName}" class="user-media-preview" />
+          </a>
+        `;
+    } else {
+        html += `
+          <div class="user-media-file">
+            <span>${safeName}</span>
+            <div class="user-media-file-actions">
+              <a href="${href}" target="_blank" rel="noopener noreferrer" class="user-media-open-btn">Open</a>
+              <a href="${href}" download="${safeName}" class="user-media-open-btn">Download</a>
+            </div>
+          </div>
+        `;
+    }
+
+    html += `<div class="user-media-meta">${safeName} (${escapeHtml(kindLabel)})</div>`;
+
+    if (safePrompt) {
+        html += `<p class="user-media-prompt">${safePrompt}</p>`;
+    }
+
+    html += `</div>`;
+    chatLi.innerHTML = html;
+    return chatLi;
+}
+
 function createChatLi(message, className) {
     const chatLi = document.createElement("li");
     chatLi.classList.add("chat", className);
@@ -1115,14 +1370,14 @@ async function testBackendConnection() {
         const response = await fetch(`${BACKEND_URL}/`);
 
         if (response.ok) {
-            console.log("✅ Backend is reachable");
+            console.log("âœ… Backend is reachable");
             return true;
         } else {
-            console.error("❌ Backend error:", response.status);
+            console.error("âŒ Backend error:", response.status);
             return false;
         }
     } catch (error) {
-        console.error("❌ Cannot reach backend:", error);
+        console.error("âŒ Cannot reach backend:", error);
         return false;
     }
 }
@@ -1152,16 +1407,16 @@ function fixSidebarCloseButton() {
   const sidebar = document.querySelector(".history-sidebar");
   
   if (!closeBtn) {
-    console.error("❌ Close sidebar button not found!");
+    console.error("âŒ Close sidebar button not found!");
     return;
   }
   
   if (!sidebar) {
-    console.error("❌ History sidebar not found!");
+    console.error("âŒ History sidebar not found!");
     return;
   }
   
-  console.log("✅ Found sidebar close button:", closeBtn);
+  console.log("âœ… Found sidebar close button:", closeBtn);
   
   // Remove any existing event listeners by cloning
   const newCloseBtn = closeBtn.cloneNode(true);
@@ -1171,7 +1426,7 @@ function fixSidebarCloseButton() {
   newCloseBtn.addEventListener("click", function(e) {
     e.preventDefault();
     e.stopPropagation();
-    console.log("🟡 Closing sidebar...");
+    console.log("ðŸŸ¡ Closing sidebar...");
     
     // Remove active class
     sidebar.classList.remove("active");
@@ -1181,7 +1436,7 @@ function fixSidebarCloseButton() {
       sidebar.style.transform = "translateX(-100%)";
     }
     
-    console.log("✅ Sidebar closed");
+    console.log("âœ… Sidebar closed");
   });
   
   // Also add event listener to the original sidebar reference
@@ -1199,7 +1454,7 @@ function fixSidebarCloseButton() {
 
 // Run fix when page loads
 document.addEventListener("DOMContentLoaded", function() {
-  console.log("🚀 DOM loaded, fixing sidebar close button...");
+  console.log("ðŸš€ DOM loaded, fixing sidebar close button...");
   setTimeout(fixSidebarCloseButton, 500); // Delay to ensure everything is loaded
 });
 
@@ -1216,17 +1471,17 @@ document.addEventListener("click", function(e) {
 // ================= WEBVIEW FIX FOR SIDEBAR CLOSE BUTTON =================
 
 function setupWebViewCloseButton() {
-  console.log("🔧 Setting up WebView close button...");
+  console.log("ðŸ”§ Setting up WebView close button...");
   
   const closeBtn = document.getElementById("close-sidebar");
   const sidebar = document.querySelector(".history-sidebar");
   
   if (!closeBtn || !sidebar) {
-    console.log("⏳ WebView: Waiting for elements...");
+    console.log("â³ WebView: Waiting for elements...");
     return;
   }
   
-  console.log("✅ WebView: Found close button and sidebar");
+  console.log("âœ… WebView: Found close button and sidebar");
   
   // SIMPLEST SOLUTION: Direct onclick
   closeBtn.onclick = function(e) {
@@ -1234,7 +1489,7 @@ function setupWebViewCloseButton() {
       e.preventDefault();
       e.stopPropagation();
     }
-    console.log("🎯 WebView: Close button CLICKED!");
+    console.log("ðŸŽ¯ WebView: Close button CLICKED!");
     
     // Close sidebar
     sidebar.classList.remove("active");
@@ -1248,7 +1503,7 @@ function setupWebViewCloseButton() {
     return false;
   };
   
-  console.log("✅ WebView: Close button setup complete");
+  console.log("âœ… WebView: Close button setup complete");
 }
 
 // Run setup immediately and multiple times
@@ -1261,7 +1516,7 @@ setTimeout(setupWebViewCloseButton, 2000);
 document.addEventListener("click", function(e) {
   if (e.target.closest("#sidebar-toggle") || 
       e.target.closest(".start-chat-btn")) {
-    console.log("🔄 Sidebar state changed, re-setting up close button...");
+    console.log("ðŸ”„ Sidebar state changed, re-setting up close button...");
     setTimeout(setupWebViewCloseButton, 300);
   }
 });
@@ -1348,14 +1603,14 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
     const lang = (match[1] || "text").toLowerCase();
     const code = match[2] || "";
 
-    // ✅ Type normal text (preserve newlines)
+    // âœ… Type normal text (preserve newlines)
     if (before) {
       const span = document.createElement("span");
       element.appendChild(span);
       await typePlainText(span, before);
     }
 
-    // ✅ Create code block
+    // âœ… Create code block
     const block = document.createElement("div");
     block.className = "code-block";
     block.innerHTML = `
@@ -1364,14 +1619,14 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
     `;
     element.appendChild(block);
 
-    // ✅ Type code (exact formatting)
+    // âœ… Type code (exact formatting)
     const codeEl = block.querySelector("code");
     await typeCode(codeEl, code);
 
     lastIndex = match.index + match[0].length;
   }
 
-  // ✅ Remaining text
+  // âœ… Remaining text
   const rest = fullText.slice(lastIndex);
   if (rest) {
     const span = document.createElement("span");

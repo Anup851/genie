@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Connection Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <div id="status">Testing...</div>
+    
+    <script>
+        // 🔴 USE YOUR ACTUAL VALUES
+        const SUPABASE_URL = 'https://nikzyppkwedmzldghrgh.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM';
+        
+         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        async function testConnection() {
+            const status = document.getElementById('status');
+            
+            try {
+                // Test 1: Check if we can access Supabase
+                status.innerHTML = '⏳ Testing connection...';
+                
+                // Simple auth check
+                const { data, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    status.innerHTML = `❌ Auth error: ${error.message}`;
+                    status.style.color = 'red';
+                } else {
+                    status.innerHTML = '✅ Supabase connected successfully!<br>';
+                    status.innerHTML += '📊 Session: ' + (data.session ? 'Active' : 'None');
+                    status.style.color = 'green';
+                }
+                
+                // Test 2: Check API reachable
+                const test = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+                    headers: { apikey: SUPABASE_ANON_KEY }
+                });
+                
+                if (test.ok) {
+                    status.innerHTML += '<br>✅ Auth API reachable';
+                }
+                
+            } catch (err) {
+                status.innerHTML = `❌ Connection failed: ${err.message}`;
+                status.style.color = 'red';
+            }
+        }
+        
+        testConnection();
+    </script>
+</body>
+</html>

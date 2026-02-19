@@ -1,4 +1,4 @@
-// server.js - Genie Backend (COMPLETE FIXED)
+﻿// server.js - Genie Backend (COMPLETE FIXED)
 import crypto from "crypto";
 import Database from "@replit/database";
 import express from "express";
@@ -24,7 +24,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 // --- Check API Key ---
 if (!process.env.SARVAM_API_KEY) {
-  console.error("❌ SARVAM_API_KEY is missing in .env!");
+  console.error("âŒ SARVAM_API_KEY is missing in .env!");
   process.exit(1);
 }
 
@@ -73,7 +73,7 @@ app.use((req, res, next) => {
 const MAX_SESSIONS = 100;
 const MAX_HISTORY_LENGTH = 150;
 const MAX_MESSAGE_LENGTH = 12000;
-const MAX_RESPONSE_TOKENS = 4000; // 🔥 INCREASED for full code
+const MAX_RESPONSE_TOKENS = 4000; // ðŸ”¥ INCREASED for full code
 const AUTO_CLEAN_THRESHOLD = 120;
 const CLEAN_KEEP_RECENT = 40;
 const SESSION_LIMIT_WARNING = 100;
@@ -110,6 +110,7 @@ function sessionsKey(userId) {
 function sessionMessagesKey(userId, chatId) {
   return `chat_${userId}_${chatId}`;
 }
+
 
 function makeChatId() {
   return (
@@ -154,7 +155,6 @@ async function supabaseAuthRequired(req, res, next) {
   req.auth = { sub: data.user.id, email: data.user.email || null };
   next();
 }
-
 // ============================================================
 // SESSION FUNCTIONS - FIXED
 // ============================================================
@@ -178,7 +178,7 @@ async function ensureSession(userId, chatId) {
       return session;
     }
 
-    console.log(`🆕 Creating new session for chatId: ${chatId}`);
+    console.log(`ðŸ†• Creating new session for chatId: ${chatId}`);
     session = {
       chatId,
       title: "New chat",
@@ -192,7 +192,7 @@ async function ensureSession(userId, chatId) {
 
     return session;
   } catch (err) {
-    console.error("❌ ensureSession error:", err);
+    console.error("âŒ ensureSession error:", err);
     return null;
   }
 }
@@ -243,11 +243,11 @@ async function updateSessionTitle(userId, chatId, userMessage) {
     sessions.unshift(session);
 
     await saveSessions(userId, sessions);
-    console.log(`✅ Title updated: "${newTitle}" for ${chatId}`);
+    console.log(`âœ… Title updated: "${newTitle}" for ${chatId}`);
 
     return session;
   } catch (err) {
-    console.error("❌ updateSessionTitle error:", err);
+    console.error("âŒ updateSessionTitle error:", err);
     return null;
   }
 }
@@ -277,7 +277,7 @@ async function touchSession(userId, chatId, userMessage = null) {
 
     return session;
   } catch (err) {
-    console.error("❌ touchSession error:", err);
+    console.error("âŒ touchSession error:", err);
     return null;
   }
 }
@@ -297,7 +297,7 @@ async function autoCleanChatHistory(userId, chatId) {
     }
 
     console.log(
-      `🧹 Auto-cleaning chat ${chatId}: ${history.length} → ${CLEAN_KEEP_RECENT} messages`,
+      `ðŸ§¹ Auto-cleaning chat ${chatId}: ${history.length} â†’ ${CLEAN_KEEP_RECENT} messages`,
     );
 
     const cleanedHistory = history.slice(-CLEAN_KEEP_RECENT);
@@ -319,10 +319,10 @@ async function autoCleanChatHistory(userId, chatId) {
     }
 
     await db.set(key, finalHistory);
-    console.log(`✅ Cleaned to ${finalHistory.length} messages`);
+    console.log(`âœ… Cleaned to ${finalHistory.length} messages`);
     return finalHistory;
   } catch (err) {
-    console.error("❌ Auto-clean error:", err);
+    console.error("âŒ Auto-clean error:", err);
     return [];
   }
 }
@@ -333,7 +333,7 @@ async function forceCleanChat(userId, chatId) {
     const raw = await db.get(key);
     const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
 
-    console.log(`🧨 Force cleaning chat ${chatId}: ${history.length} messages`);
+    console.log(`ðŸ§¨ Force cleaning chat ${chatId}: ${history.length} messages`);
 
     const recentHistory = history.slice(-20);
 
@@ -353,10 +353,10 @@ async function forceCleanChat(userId, chatId) {
     }
 
     await db.set(key, cleaned);
-    console.log(`✅ Force cleaned to ${cleaned.length} messages`);
+    console.log(`âœ… Force cleaned to ${cleaned.length} messages`);
     return cleaned;
   } catch (err) {
-    console.error("❌ Force clean error:", err);
+    console.error("âŒ Force clean error:", err);
     return [];
   }
 }
@@ -440,7 +440,7 @@ async function saveMessage(userId, role, message, chatId = "default") {
     await db.set(key, history);
     return history;
   } catch (err) {
-    console.error("❌ saveMessage error:", err);
+    console.error("âŒ saveMessage error:", err);
     return null;
   }
 }
@@ -462,7 +462,7 @@ async function getChatHistory(userId, chatId = "default") {
 
     return history;
   } catch (err) {
-    console.error("❌ getChatHistory error:", err);
+    console.error("âŒ getChatHistory error:", err);
     return [];
   }
 }
@@ -473,7 +473,7 @@ async function getChatHistory(userId, chatId = "default") {
 
 app.get("/", (req, res) => {
   res.json({
-    status: "✅ Genie Backend (COMPLETE FIXED)",
+    status: "âœ… Genie Backend (COMPLETE FIXED)",
     timestamp: new Date().toISOString(),
     limits: {
       maxHistory: MAX_HISTORY_LENGTH,
@@ -515,6 +515,115 @@ app.get("/chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
   res.json({ chatId, messages });
 });
 
+async function analyzeMediaHandler(req, res) {
+  const userId = req.auth?.sub;
+  const { prompt, mediaData, imageData, mediaName, mediaType, chatId } = req.body || {};
+  const activeChatId = chatId || "default";
+  const uploadData = mediaData || imageData;
+
+  if (!userId || !uploadData || typeof uploadData !== "string") {
+    return res.status(400).json({ error: "Invalid request" });
+  }
+
+  const defaultPrompt = "Analyze this file in detail.";
+  const userPrompt = String(prompt || defaultPrompt).trim() || defaultPrompt;
+
+  try {
+    if (activeChatId !== "default") {
+      await ensureSession(userId, activeChatId);
+    }
+
+    const dataUrlMatch = uploadData.match(/^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!dataUrlMatch) {
+      return res.status(400).json({ error: "Invalid media format" });
+    }
+
+    const mimeType = String(mediaType || dataUrlMatch[1] || "").toLowerCase();
+    const base64Data = dataUrlMatch[2];
+    const safeMediaName = String(mediaName || "uploaded-file").slice(0, 160);
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(200).json({
+        reply:
+          "Media analysis is not configured on backend. Add OPENROUTER_API_KEY in server secrets/env and try again.",
+      });
+    }
+
+    const userParts = [{ type: "text", text: userPrompt }];
+    if (mimeType.startsWith("image/")) {
+      userParts.push({
+        type: "image_url",
+        image_url: { url: uploadData },
+      });
+    } else {
+      userParts.push({
+        type: "file",
+        file: {
+          filename: safeMediaName,
+          file_data: uploadData,
+        },
+      });
+    }
+
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "qwen/qwen2.5-vl-32b-instruct",
+          messages: [
+            { role: "system", content: "You analyze uploaded media and answer clearly and accurately." },
+            { role: "user", content: userParts },
+          ],
+          temperature: 0.3,
+          max_tokens: 1400,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Media analyze API error:", response.status, errorText.slice(0, 300));
+      return res.status(200).json({
+        reply: "Sorry, media analysis failed. Please try again.",
+      });
+    }
+
+    const data = await response.json();
+    const reply =
+      data?.choices?.[0]?.message?.content ||
+      "I could not analyze this file.";
+
+    await saveMessage(userId, "user", `[Media: ${mimeType}] ${userPrompt}`, activeChatId);
+    await saveMessage(userId, "assistant", reply, activeChatId);
+
+    const history = await getChatHistory(userId, activeChatId);
+    const isFirstMessage = history.length <= 2;
+
+    if (isFirstMessage) {
+      await touchSession(userId, activeChatId, userPrompt);
+    } else {
+      await touchSession(userId, activeChatId);
+    }
+
+    return res.json({
+      reply,
+      isMedia: true,
+    });
+  } catch (err) {
+    console.error("/analyze-media error:", err);
+    return res.status(500).json({
+      reply: "Sorry, an error occurred while analyzing the file.",
+    });
+  }
+}
+
+app.post("/analyze-media", supabaseAuthRequired, analyzeMediaHandler);
+app.post("/analyze-image", supabaseAuthRequired, analyzeMediaHandler);
 // ============================================================
 // MAIN CHAT ENDPOINT - WITH SESSION LIMIT WARNING
 // ============================================================
@@ -531,7 +640,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
   const rateLimit = checkRateLimit(userId);
   if (!rateLimit.allowed) {
     return res.status(429).json({
-      reply: `⏳ Too many requests. Please wait a minute.`,
+      reply: `â³ Too many requests. Please wait a minute.`,
       isRateLimited: true,
     });
   }
@@ -541,40 +650,40 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     const optimizedParams = getOptimizedParams(sanitizedMessage);
 
     console.log(
-      `💬 Chat request: ${userId.slice(0, 8)}... | ${sanitizedMessage.length} chars | chatId: ${activeChatId}`,
+      `ðŸ’¬ Chat request: ${userId.slice(0, 8)}... | ${sanitizedMessage.length} chars | chatId: ${activeChatId}`,
     );
 
-    // ✅ ENSURE SESSION EXISTS
+    // âœ… ENSURE SESSION EXISTS
     if (activeChatId !== "default") {
       await ensureSession(userId, activeChatId);
     }
 
-    // ✅ GET HISTORY
+    // âœ… GET HISTORY
     let history = await getChatHistory(userId, activeChatId);
 
-    // 🟡🟡🟡 CHECK SESSION LIMIT - ADD THIS BLOCK 🟡🟡🟡
+    // ðŸŸ¡ðŸŸ¡ðŸŸ¡ CHECK SESSION LIMIT - ADD THIS BLOCK ðŸŸ¡ðŸŸ¡ðŸŸ¡
     const sessionLimitExceeded = history.length >= SESSION_LIMIT_WARNING;
     const sessionNearLimit = history.length >= SESSION_LIMIT_WARNING - 20;
 
     if (sessionLimitExceeded) {
       console.log(
-        `⚠️⚠️⚠️ SESSION LIMIT EXCEEDED: ${history.length} messages in chat ${activeChatId}`,
+        `âš ï¸âš ï¸âš ï¸ SESSION LIMIT EXCEEDED: ${history.length} messages in chat ${activeChatId}`,
       );
 
       // Auto-clean will happen, but also warn user
       return res.status(200).json({
         reply:
-          "⚠️ **Chat session limit reached!** ⚠️\n\nThis conversation has too many messages. Please **start a new chat** to continue smoothly.\n\n👉 Click **New Chat** button to create a fresh session.",
+          "âš ï¸ **Chat session limit reached!** âš ï¸\n\nThis conversation has too many messages. Please **start a new chat** to continue smoothly.\n\nðŸ‘‰ Click **New Chat** button to create a fresh session.",
         sessionLimitExceeded: true,
         forceNewChat: true,
         messageCount: history.length,
       });
     }
 
-    // ✅ CHECK IF FIRST MESSAGE
+    // âœ… CHECK IF FIRST MESSAGE
     const isFirstMessage = history.length === 0;
 
-    // ✅ CLEAN IF NEEDED
+    // âœ… CLEAN IF NEEDED
     if (history.length > 100) {
       let hasDuplicates = false;
       for (let i = 1; i < history.length; i++) {
@@ -587,18 +696,17 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         }
       }
       if (hasDuplicates) {
-        console.log("🔄 Detected duplicates, force cleaning...");
+        console.log("ðŸ”„ Detected duplicates, force cleaning...");
         history = await forceCleanChat(userId, activeChatId);
       }
     }
 
-    // ✅ BUILD MESSAGES FOR AI
+    // âœ… BUILD MESSAGES FOR AI
     const messagesForAI = [];
     messagesForAI.push({
       role: "system",
       content: "You are Genie, a helpful AI assistant. Be concise and helpful.",
     });
-
     const recentHistory = history.slice(-optimizedParams.historyLimit);
     let lastRole = "system";
 
@@ -617,7 +725,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
       content: sanitizedMessage,
     });
 
-    // ✅ CALL SARVAM AI
+    // âœ… CALL SARVAM AI
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
@@ -644,7 +752,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
-        "❌ Sarvam error:",
+        "âŒ Sarvam error:",
         response.status,
         errorText.substring(0, 200),
       );
@@ -653,10 +761,10 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         response.status === 400 &&
         errorText.includes("First message must be from user")
       ) {
-        console.log("🔄 Corrupted chat detected, force cleaning...");
+        console.log("ðŸ”„ Corrupted chat detected, force cleaning...");
         await forceCleanChat(userId, activeChatId);
         return res.status(200).json({
-          reply: "🔄 Chat cleaned. Please send your message again.",
+          reply: "ðŸ”„ Chat cleaned. Please send your message again.",
           needsRetry: true,
         });
       }
@@ -669,27 +777,27 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || "No response.";
 
-    // ✅ SAVE MESSAGES
+    // âœ… SAVE MESSAGES
     await saveMessage(userId, "user", sanitizedMessage, activeChatId);
     await saveMessage(userId, "assistant", reply, activeChatId);
 
-    // ✅ UPDATE SESSION TITLE FOR FIRST MESSAGE
+    // âœ… UPDATE SESSION TITLE FOR FIRST MESSAGE
     if (isFirstMessage) {
       console.log(
-        `📝 FIRST MESSAGE - Updating title to: "${sanitizedMessage.slice(0, 35)}..."`,
+        `ðŸ“ FIRST MESSAGE - Updating title to: "${sanitizedMessage.slice(0, 35)}..."`,
       );
       await touchSession(userId, activeChatId, sanitizedMessage);
     } else {
       await touchSession(userId, activeChatId);
     }
 
-    // 🟡🟡🟡 ADD WARNING TO RESPONSE IF NEAR LIMIT 🟡🟡🟡
+    // ðŸŸ¡ðŸŸ¡ðŸŸ¡ ADD WARNING TO RESPONSE IF NEAR LIMIT ðŸŸ¡ðŸŸ¡ðŸŸ¡
     let finalReply = reply;
     let warning = null;
 
     if (sessionNearLimit && !sessionLimitExceeded) {
       const remaining = SESSION_LIMIT_WARNING - history.length;
-      warning = `\n\n---\n⚠️ **Warning:** This chat has ${history.length} messages. You have **${remaining} messages** left before session limit. Consider starting a new chat.`;
+      warning = `\n\n---\nâš ï¸ **Warning:** This chat has ${history.length} messages. You have **${remaining} messages** left before session limit. Consider starting a new chat.`;
       finalReply = reply + warning;
     }
 
@@ -708,7 +816,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
       sessionLimitExceeded: false,
     });
   } catch (err) {
-    console.error("❌ /chat error:", err);
+    console.error("âŒ /chat error:", err);
     let reply = "Sorry, an error occurred.";
     if (err.name === "AbortError") {
       reply = "Request timeout. Try a smaller request.";
@@ -748,7 +856,7 @@ app.delete("/chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
   }
 
   try {
-    console.log(`🗑️ Deleting chat ${chatId} for user ${userId}`);
+    console.log(`ðŸ—‘ï¸ Deleting chat ${chatId} for user ${userId}`);
     const messagesKey = sessionMessagesKey(userId, chatId);
     await db.delete(messagesKey);
 
@@ -756,14 +864,14 @@ app.delete("/chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
     const filteredSessions = sessions.filter((s) => s.chatId !== chatId);
     await saveSessions(userId, filteredSessions);
 
-    console.log(`✅ Chat ${chatId} deleted successfully`);
+    console.log(`âœ… Chat ${chatId} deleted successfully`);
     res.json({
       ok: true,
       message: "Chat deleted successfully",
       remainingSessions: filteredSessions.length,
     });
   } catch (err) {
-    console.error("❌ Delete session error:", err);
+    console.error("âŒ Delete session error:", err);
     res
       .status(500)
       .json({ error: "Failed to delete chat", details: err.message });
@@ -777,7 +885,7 @@ app.delete("/chats/:userId", supabaseAuthRequired, async (req, res) => {
   }
 
   try {
-    console.log(`🗑️ Deleting ALL chats for user ${userId}`);
+    console.log(`ðŸ—‘ï¸ Deleting ALL chats for user ${userId}`);
     const sessions = await listSessions(userId);
     console.log(`Found ${sessions.length} sessions to delete`);
 
@@ -785,9 +893,9 @@ app.delete("/chats/:userId", supabaseAuthRequired, async (req, res) => {
       try {
         const key = sessionMessagesKey(userId, s.chatId);
         await db.delete(key);
-        console.log(`  ✅ Deleted messages: ${s.chatId}`);
+        console.log(`  âœ… Deleted messages: ${s.chatId}`);
       } catch (err) {
-        console.error(`  ❌ Failed to delete ${s.chatId}:`, err.message);
+        console.error(`  âŒ Failed to delete ${s.chatId}:`, err.message);
       }
     }
 
@@ -796,14 +904,14 @@ app.delete("/chats/:userId", supabaseAuthRequired, async (req, res) => {
       await db.delete(`chat_${userId}`);
     } catch (err) {}
 
-    console.log(`✅ All ${sessions.length} chats deleted successfully`);
+    console.log(`âœ… All ${sessions.length} chats deleted successfully`);
     res.json({
       ok: true,
       deleted: sessions.length,
       message: `Successfully deleted ${sessions.length} chats`,
     });
   } catch (err) {
-    console.error("❌ Delete all chats error:", err);
+    console.error("âŒ Delete all chats error:", err);
     res
       .status(500)
       .json({ error: "Failed to delete all chats", details: err.message });
@@ -997,28 +1105,34 @@ app.get("/api/me", authRequired, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`
-✅ Genie Backend (COMPLETE FIXED) Running!
-📍 Port: ${PORT}
-🔐 API Key: ${process.env.SARVAM_API_KEY ? "Loaded" : "Missing!"}
+âœ… Genie Backend (COMPLETE FIXED) Running!
+ðŸ“ Port: ${PORT}
+ðŸ” API Key: ${process.env.SARVAM_API_KEY ? "Loaded" : "Missing!"}
 
-📈 FIXED LIMITS:
+ðŸ“ˆ FIXED LIMITS:
   Max History: ${MAX_HISTORY_LENGTH} messages
   Max Message: ${MAX_MESSAGE_LENGTH} chars  
-  Max Tokens: ${MAX_RESPONSE_TOKENS} for code 🔥
+  Max Tokens: ${MAX_RESPONSE_TOKENS} for code ðŸ”¥
   Rate Limit: ${MAX_REQUESTS_PER_MINUTE}/min
 
-🧹 AUTO-CLEAN: Clean at ${AUTO_CLEAN_THRESHOLD} messages
-💾 Database: Connected
-🧾 Sessions: Max ${MAX_SESSIONS}
+ðŸ§¹ AUTO-CLEAN: Clean at ${AUTO_CLEAN_THRESHOLD} messages
+ðŸ’¾ Database: Connected
+ðŸ§¾ Sessions: Max ${MAX_SESSIONS}
 
-✅ CHAT TITLE FIXED - First message will appear as title!
-✅ DUPLICATE CHAT ENDPOINT REMOVED
-✅ TOKENS INCREASED to 4000 for complete code
+âœ… CHAT TITLE FIXED - First message will appear as title!
+âœ… DUPLICATE CHAT ENDPOINT REMOVED
+âœ… TOKENS INCREASED to 4000 for complete code
   `);
 });
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  console.log("\n🛑 Shutting down...");
+  console.log("\nðŸ›‘ Shutting down...");
   process.exit(0);
 });
+
+
+
+
+
+
