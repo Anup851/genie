@@ -1045,7 +1045,7 @@ async function generateResponse(
     messageElement.innerHTML = "";
     const textSpeed =
       responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
-    await typeRichMarkdown(messageElement, responseText, textSpeed);
+    await typeTextAndCode(messageElement, responseText, textSpeed, 5);
     messageElement.innerHTML = parseFencedBlocks(responseText);
     if (window.Prism) Prism.highlightAllUnder(messageElement);
     enableCopyButtons(messageElement);
@@ -1295,10 +1295,10 @@ function parseFencedBlocks(text) {
     const source = String(text || "").replace(/\r\n/g, "\n");
     const codeBlocks = [];
     const withPlaceholders = source.replace(
-      /```([\w-]+)?\n([\s\S]*?)```/g,
+      /```([\w#+-]+)?\n([\s\S]*?)```/g,
       (_, lang, code) => {
         const idx =
-          codeBlocks.push({ lang: (lang || "text").toLowerCase(), code }) - 1;
+          codeBlocks.push({ lang: normalizeCodeLanguage(lang || "text"), code }) - 1;
         return `\n@@CODE_BLOCK_${idx}@@\n`;
       },
     );
@@ -1750,28 +1750,37 @@ function typeCharsInto(el, text, baseSpeed = 10, mode = "html") {
 }
 
 async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4) {
-  const regex = /```(\w+)?\n([\s\S]*?)```/g;
+  const regex = /```([\w#+-]+)?\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match;
 
   element.innerHTML = "";
 
-  // helper: type normal text (HTML safe) + \n => <br>
+  // helper: type normal text with live markdown formatting
   async function typePlainText(target, text) {
-    const safe = escapeHTML(text); // your escapeHTML / escapeHtml function
-    for (let i = 0; i < safe.length; i++) {
-      const ch = safe[i];
-      if (ch === "\n") target.innerHTML += "<br>";
-      else target.innerHTML += ch;
+    const raw = String(text || "");
+    let buffer = "";
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      buffer += ch;
+
+      if (i % 2 === 0 || i === raw.length - 1) {
+        target.innerHTML = parseFencedBlocks(buffer);
+      }
 
       const chatbox = document.querySelector(".chatbox");
       if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
 
-      await new Promise((r) => setTimeout(r, textSpeed));
+      let delay = textSpeed;
+      if (ch === "\n") delay = Math.max(20, textSpeed + 8);
+      else if (ch === "." || ch === "!" || ch === "?")
+        delay = Math.max(45, textSpeed + 35);
+      else if (ch === "," || ch === ";") delay = Math.max(30, textSpeed + 18);
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
 
-  // helper: type code EXACT (textContent)
+  // helper: type code EXACT (textContent), highlight only after typing completes
   async function typeCode(target, code) {
     target.textContent = "";
     for (let i = 0; i < code.length; i++) {
@@ -1782,18 +1791,20 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
 
       await new Promise((r) => setTimeout(r, codeSpeed));
     }
+    if (window.Prism) Prism.highlightElement(target);
   }
 
   while ((match = regex.exec(fullText)) !== null) {
     const before = fullText.slice(lastIndex, match.index);
-    const lang = (match[1] || "text").toLowerCase();
+    const lang = normalizeCodeLanguage(match[1] || "text");
     const code = match[2] || "";
 
     // âœ… Type normal text (preserve newlines)
     if (before) {
-      const span = document.createElement("span");
-      element.appendChild(span);
-      await typePlainText(span, before);
+      const textChunk = document.createElement("div");
+      textChunk.className = "live-text-chunk";
+      element.appendChild(textChunk);
+      await typePlainText(textChunk, before);
     }
 
     // âœ… Create code block
@@ -1815,10 +1826,25 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
   // âœ… Remaining text
   const rest = fullText.slice(lastIndex);
   if (rest) {
-    const span = document.createElement("span");
-    element.appendChild(span);
-    await typePlainText(span, rest);
+    const textChunk = document.createElement("div");
+    textChunk.className = "live-text-chunk";
+    element.appendChild(textChunk);
+    await typePlainText(textChunk, rest);
   }
+}
+
+function normalizeCodeLanguage(lang = "text") {
+  const normalized = String(lang || "text").trim().toLowerCase();
+  const aliases = {
+    js: "javascript",
+    react: "jsx",
+    py: "python",
+    python3: "python",
+    "c#": "csharp",
+    csharp: "csharp",
+    "c++": "cpp",
+  };
+  return aliases[normalized] || normalized || "text";
 }
 
 async function typeRichMarkdown(element, fullText, textSpeed = 12) {
