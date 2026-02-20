@@ -12,6 +12,13 @@ dotenv.config();
 // --- Initialize ---
 const db = new Database();
 const app = express();
+
+function normalizeInlineCodeArtifacts(text) {
+  return String(text || "")
+    // Wrap leaked placeholder tokens as inline markdown code without changing content.
+    .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*_?\s*\d+\s*@{1,2})/gi, "`$1`")
+    .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`");
+}
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://nikzyppkwedmzldghrgh.supabase.co";
@@ -629,7 +636,7 @@ async function analyzeMediaHandler(req, res) {
             {
               role: "system",
               content:
-                "You analyze uploaded media and answer clearly and accurately.",
+                "You analyze uploaded media and answer clearly and accurately. Always write real inline code using backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
             },
             { role: "user", content: userParts },
           ],
@@ -658,8 +665,9 @@ async function analyzeMediaHandler(req, res) {
     }
 
     const data = await response.json();
-    const reply =
-      data?.choices?.[0]?.message?.content || "I could not analyze this file.";
+    const reply = normalizeInlineCodeArtifacts(
+      data?.choices?.[0]?.message?.content || "I could not analyze this file.",
+    );
 
     await saveMessage(
       userId,
@@ -780,7 +788,8 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     const messagesForAI = [];
     messagesForAI.push({
       role: "system",
-      content: "You are Genie, a helpful AI assistant. Be concise and helpful.",
+      content:
+        "You are Genie, a helpful AI assistant. Be concise and helpful. Always write real inline code using backticks like `nums` and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
     });
     const recentHistory = history.slice(-optimizedParams.historyLimit);
     let lastRole = "system";
@@ -850,7 +859,9 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     }
 
     const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || "No response.";
+    const reply = normalizeInlineCodeArtifacts(
+      data.choices?.[0]?.message?.content || "No response.",
+    );
 
     // âœ… SAVE MESSAGES
     await saveMessage(userId, "user", sanitizedMessage, activeChatId);

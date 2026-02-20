@@ -1042,6 +1042,7 @@ async function generateResponse(
       responseText = data.reply || "No response from AI.";
     }
 
+    responseText = normalizeInlineCodeArtifacts(responseText);
     messageElement.innerHTML = "";
     const textSpeed =
       responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
@@ -1291,8 +1292,15 @@ function ensureMsgActions(container) {
 }
 
 // 8. CODE BLOCKS AND FORMATTING
+function normalizeInlineCodeArtifacts(text) {
+    return String(text || "")
+      // Wrap leaked placeholder tokens as inline markdown code without changing content.
+      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*_?\s*\d+\s*@{1,2})/gi, "`$1`")
+      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`");
+}
+
 function parseFencedBlocks(text) {
-    const source = String(text || "").replace(/\r\n/g, "\n");
+    const source = normalizeInlineCodeArtifacts(text).replace(/\r\n/g, "\n");
     const codeBlocks = [];
     const withPlaceholders = source.replace(
       /```([\w#+-]+)?\n([\s\S]*?)```/g,
@@ -1427,7 +1435,8 @@ function formatInlineText(text) {
   const inlineCodeTokens = [];
 
   output = output.replace(/`([^`]+)`/g, (_, code) => {
-    const token = `@@INLINE_CODE_${inlineCodeTokens.length}@@`;
+    // Use a markdown-safe sentinel (no underscores) so emphasis parsing cannot corrupt it.
+    const token = `%%INLINECODE${inlineCodeTokens.length}%%`;
     inlineCodeTokens.push(`<code class="inline-code">${code}</code>`);
     return token;
   });
@@ -1443,7 +1452,7 @@ function formatInlineText(text) {
   output = output.replace(/(^|[^_])_([^_]+)_/g, "$1<em>$2</em>");
   output = output.replace(/\n/g, "<br>");
 
-  output = output.replace(/@@INLINE_CODE_(\d+)@@/g, (_, idx) => {
+  output = output.replace(/%%INLINECODE(\d+)%%/g, (_, idx) => {
     return inlineCodeTokens[Number(idx)] || "";
   });
 
@@ -1750,6 +1759,7 @@ function typeCharsInto(el, text, baseSpeed = 10, mode = "html") {
 }
 
 async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4) {
+  fullText = normalizeInlineCodeArtifacts(fullText);
   const regex = /```([\w#+-]+)?\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match;
@@ -1848,7 +1858,7 @@ function normalizeCodeLanguage(lang = "text") {
 }
 
 async function typeRichMarkdown(element, fullText, textSpeed = 12) {
-  const text = String(fullText || "");
+  const text = normalizeInlineCodeArtifacts(fullText);
   let buffer = "";
 
   for (let i = 0; i < text.length; i++) {
