@@ -245,6 +245,15 @@ async function updateAuthButton() {
   await syncMicAuthState();
 }
 
+// Delegated fallback: always open auth page when auth button is clicked.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("#auth-btn");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  window.location.href = "./auth.html";
+});
+
 
 // Handle logout process
 async function handleLogout() {
@@ -1166,7 +1175,7 @@ async function generateResponse(
       return;
     }
     const controller = new AbortController();
-    const requestTimeoutMs = hasMediaUpload ? 120000 : 30000;
+    const requestTimeoutMs = hasMediaUpload ? 300000 : 30000;
     timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     let responseText = "";
 
@@ -1193,11 +1202,23 @@ async function generateResponse(
       clearTimeout(timeout);
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        let serverMsg = "";
+        try {
+          const bad = await response.json();
+          serverMsg = String(bad?.reply || bad?.error || "");
+        } catch {}
+        if (response.status >= 500 || response.status === 429 || response.status === 504) {
+          responseText =
+            "Media analysis is taking longer than expected. Please try again in a moment.";
+        } else if (serverMsg) {
+          responseText = serverMsg;
+        } else {
+          responseText = "Media analysis failed. Please try again.";
+        }
+      } else {
+        const data = await response.json();
+        responseText = data.reply || "No response from AI.";
       }
-
-      const data = await response.json();
-      responseText = data.reply || "No response from AI.";
     } else {
       console.log("[GENIE] Route: /chat");
       const response = await apiFetch(`${BACKEND_URL}/chat`, {
@@ -1245,9 +1266,13 @@ async function generateResponse(
   } catch (error) {
     console.error("Error generating response:", error);
     if (error?.name === "AbortError") {
-      messageElement.innerHTML = "Request timed out. Media analysis can take longer, please try again.";
+      messageElement.innerHTML = hasMediaUpload
+        ? "Media analysis is still running and took too long. Please retry in a moment."
+        : "Request timed out. Please try again.";
     } else {
-      messageElement.innerHTML = "Failed to get response. Please try again.";
+      messageElement.innerHTML = hasMediaUpload
+        ? "Media analysis failed or service is busy. Please try again shortly."
+        : "Failed to get response. Please try again.";
     }
   } finally {
     if (timeout) clearTimeout(timeout);

@@ -589,6 +589,8 @@ body:not(.chat-started) .history-sidebar {
   flex: 1 1 auto;
   overflow-y: auto;
   min-height: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .history-list li {
@@ -1541,7 +1543,8 @@ body.light-mode .new-chat-btn {
   bottom: 12px;
   padding: 0;
   background: transparent;
-  z-index: 3;
+  z-index: 80;
+  pointer-events: auto;
 }
 
 .history-sidebar #auth-btn {
