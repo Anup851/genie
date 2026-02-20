@@ -7,11 +7,22 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // --- Initialize ---
 const db = new Database();
 const app = express();
+const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash")
+  .trim()
+  .replace(/^models\//i, "");
+const GEMINI_MEDIA_MODEL = String(
+  process.env.GEMINI_MEDIA_MODEL || GEMINI_MODEL,
+)
+  .trim()
+  .replace(/^models\//i, "");
+const GEMINI_API_VERSION = String(
+  process.env.GEMINI_API_VERSION || "v1beta",
+).trim();
 
 function normalizeInlineCodeArtifacts(text) {
   return String(text || "")
@@ -69,6 +80,7 @@ app.use((req, res, next) => {
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization, X-Requested-With",
   );
+  res.header("Permissions-Policy", "microphone=(self)");
   if (req.method === "OPTIONS") return res.status(200).end();
   next();
 });
@@ -157,6 +169,80 @@ function isTextLikeMime(mimeType) {
     mime.includes("xml") ||
     mime.includes("javascript")
   );
+}
+
+function mapRoleForGemini(role) {
+  if (role === "assistant") return "model";
+  return "user";
+}
+
+function extractGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts.map((p) => p?.text || "").join("").trim();
+}
+
+async function callGeminiGenerateContent({
+  systemInstruction = "",
+  contents = [],
+  temperature = 0.7,
+  maxOutputTokens = 1024,
+  model = GEMINI_MODEL,
+  signal,
+}) {
+  const normalizedModel = String(model || GEMINI_MODEL)
+    .trim()
+    .replace(/^models\//i, "");
+  const versions = Array.from(
+    new Set([
+      GEMINI_API_VERSION,
+      GEMINI_API_VERSION === "v1beta" ? "v1" : "v1beta",
+    ]),
+  );
+  let lastError = null;
+
+  for (const version of versions) {
+    const endpoint = `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(normalizedModel)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents,
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+        },
+      }),
+      signal,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const text = extractGeminiText(data);
+      return text || "No response.";
+    }
+
+    const errorText = await response.text();
+    lastError = {
+      status: response.status,
+      body: errorText,
+      version,
+      model: normalizedModel,
+    };
+    if (response.status !== 404) {
+      break;
+    }
+  }
+
+  const err = new Error(
+    `Gemini API error: ${lastError?.status || 500} model=${lastError?.model || normalizedModel}`,
+  );
+  err.status = lastError?.status || 500;
+  err.body = lastError?.body || "";
+  err.version = lastError?.version || GEMINI_API_VERSION;
+  err.model = lastError?.model || normalizedModel;
+  throw err;
 }
 
 async function supabaseAuthRequired(req, res, next) {
@@ -549,11 +635,11 @@ async function analyzeMediaHandler(req, res) {
   const userPrompt = String(prompt || defaultPrompt).trim() || defaultPrompt;
 
   try {
-    const openRouterKeyPreview = process.env.OPENROUTER_API_KEY
-      ? `${process.env.OPENROUTER_API_KEY.slice(0, 10)}...${process.env.OPENROUTER_API_KEY.slice(-4)}`
+    const geminiKeyPreview = process.env.GEMINI_API_KEY
+      ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...${process.env.GEMINI_API_KEY.slice(-4)}`
       : "MISSING";
     console.log(
-      `[KEY CHECK] route=/analyze-media provider=OPENROUTER key=${openRouterKeyPreview} chatId=${activeChatId}`,
+      `[KEY CHECK] route=/analyze-media provider=GEMINI key=${geminiKeyPreview} chatId=${activeChatId}`,
     );
 
     if (activeChatId !== "default") {
@@ -571,29 +657,24 @@ async function analyzeMediaHandler(req, res) {
     const base64Data = dataUrlMatch[2];
     const safeMediaName = String(mediaName || "uploaded-file").slice(0, 160);
 
-    if (!process.env.OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.status(200).json({
         reply:
-          "Media analysis is not configured on backend. Add OPENROUTER_API_KEY in server secrets/env and try again.",
+          "Media analysis is not configured on backend. Add GEMINI_API_KEY in server secrets/env and try again.",
       });
     }
 
-    const userParts = [{ type: "text", text: userPrompt }];
+    const userParts = [{ text: userPrompt }];
     if (mimeType.startsWith("image/")) {
       userParts.push({
-        type: "image_url",
-        image_url: { url: uploadData },
+        inlineData: { mimeType, data: base64Data },
       });
     } else if (mimeType === "application/pdf") {
       userParts.push({
-        type: "file",
-        file: {
-          filename: safeMediaName,
-          file_data: uploadData,
-        },
+        inlineData: { mimeType, data: base64Data },
       });
     } else if (isTextLikeMime(mimeType)) {
-      // For text-like uploads, inline text is more reliable than file upload.
+      // For text-like uploads, inline text is more reliable than binary upload.
       let decodedText = "";
       try {
         decodedText = Buffer.from(base64Data, "base64").toString("utf8");
@@ -608,9 +689,8 @@ async function analyzeMediaHandler(req, res) {
         });
       }
 
-      const clipped = decodedText.slice(0, 20000);
+      const clipped = decodedText.slice(0, 80000);
       userParts.push({
-        type: "text",
         text: `File: ${safeMediaName}\n\n${clipped}`,
       });
     } else {
@@ -620,53 +700,19 @@ async function analyzeMediaHandler(req, res) {
       });
     }
 
-    const mediaMaxTokens = Number(process.env.MEDIA_MAX_TOKENS || 700);
+    const mediaMaxTokens = Number(process.env.MEDIA_MAX_TOKENS || 4096);
+    const mediaTemperature = Number(process.env.MEDIA_TEMPERATURE || 0.1);
+    const rawReply = await callGeminiGenerateContent({
+      systemInstruction:
+        "You analyze uploaded media and answer clearly and accurately. For images and PDFs, prefer verbatim extraction over paraphrasing. Do not invent text. If any text is unreadable, mark it as [unclear]. Always write real inline code using backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
+      contents: [{ role: "user", parts: userParts }],
+      temperature: mediaTemperature,
+      maxOutputTokens: mediaMaxTokens,
+      model: GEMINI_MEDIA_MODEL,
+    });
 
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "meta-llama/llama-3.2-11b-vision-instruct",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You analyze uploaded media and answer clearly and accurately. Always write real inline code using backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
-            },
-            { role: "user", content: userParts },
-          ],
-          temperature: 0.3,
-          max_tokens: mediaMaxTokens,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        "Media analyze API error:",
-        response.status,
-        errorText.slice(0, 300),
-      );
-      if (response.status === 402) {
-        return res.status(200).json({
-          reply:
-            "Media analysis paused: OpenRouter credits are low for current token budget. Add credits or reduce MEDIA_MAX_TOKENS in backend env.",
-        });
-      }
-      return res.status(200).json({
-        reply: "Sorry, media analysis failed. Please try again.",
-      });
-    }
-
-    const data = await response.json();
     const reply = normalizeInlineCodeArtifacts(
-      data?.choices?.[0]?.message?.content || "I could not analyze this file.",
+      rawReply || "I could not analyze this file.",
     );
 
     await saveMessage(
@@ -692,6 +738,13 @@ async function analyzeMediaHandler(req, res) {
     });
   } catch (err) {
     console.error("/analyze-media error:", err);
+    if (err?.status === 404) {
+      return res.status(200).json({
+        reply:
+          `Media analysis model not found: \`${err.model || GEMINI_MODEL}\` for API \`${err.version || GEMINI_API_VERSION}\`. ` +
+          "Set GEMINI_MODEL to a valid model (for example `gemini-2.5-flash`) and retry.",
+      });
+    }
     return res.status(500).json({
       reply: "Sorry, an error occurred while analyzing the file.",
     });
@@ -968,6 +1021,34 @@ app.delete("/chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
   }
 });
 
+app.put("/chat/:userId/:chatId/title", supabaseAuthRequired, async (req, res) => {
+  const userId = req.auth?.sub;
+  const { chatId } = req.params;
+  const title = String(req.body?.title || "").trim().slice(0, 60);
+  if (!userId || !chatId) {
+    return res.status(400).json({ error: "Invalid userId or chatId" });
+  }
+  if (!title) {
+    return res.status(400).json({ error: "Invalid title" });
+  }
+  try {
+    const sessions = await listSessions(userId);
+    const idx = sessions.findIndex((s) => s.chatId === chatId);
+    if (idx === -1) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+    sessions[idx].title = title;
+    sessions[idx].updatedAt = Date.now();
+    const [session] = sessions.splice(idx, 1);
+    sessions.unshift(session);
+    await saveSessions(userId, sessions);
+    return res.json({ success: true, chatId, title });
+  } catch (err) {
+    console.error("❌ Error updating chat title:", err);
+    return res.status(500).json({ error: "Failed to update title" });
+  }
+});
+
 app.delete("/chats/:userId", supabaseAuthRequired, async (req, res) => {
   const userId = req.auth?.sub;
   if (!userId) {
@@ -1205,7 +1286,13 @@ app.listen(PORT, () => {
   console.log(`
 âœ… Genie Backend (COMPLETE FIXED) Running!
 ðŸ“ Port: ${PORT}
-ðŸ” API Key: ${process.env.SARVAM_API_KEY ? "Loaded" : "Missing!"}
+ðŸ” SARVAM_API_KEY (chat): ${process.env.SARVAM_API_KEY ? "Loaded" : "Missing!"}
+ðŸ” GEMINI_API_KEY (media): ${process.env.GEMINI_API_KEY ? "Loaded" : "Missing!"}
+ðŸ§  GEMINI_MODEL: ${GEMINI_MODEL}
+ðŸ§  GEMINI_MEDIA_MODEL: ${GEMINI_MEDIA_MODEL}
+ðŸ§  GEMINI_API_VERSION: ${GEMINI_API_VERSION}
+ðŸ§  MEDIA_MAX_TOKENS: ${Number(process.env.MEDIA_MAX_TOKENS || 4096)}
+ðŸ§  MEDIA_TEMPERATURE: ${Number(process.env.MEDIA_TEMPERATURE || 0.1)}
 
 ðŸ“ˆ FIXED LIMITS:
   Max History: ${MAX_HISTORY_LENGTH} messages

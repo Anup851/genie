@@ -18,8 +18,10 @@ const startChatBtn = document.querySelector(".start-chat-btn");
 const modeToggle = document.getElementById("mode-toggle");
 const modeIcon = modeToggle?.querySelector(".material-symbols-outlined");
 const micBtn = document.getElementById("mic-btn");
+const speechStatus = document.getElementById("speech-status");
 const authBtn = document.getElementById("auth-btn");
 const imageUploadInput = document.getElementById("image-upload");
+const imageUploadLabel = document.querySelector('label[for="image-upload"]');
 const selectedMediaPreview = document.getElementById("selected-media-preview");
 
 let pendingImageData = null;
@@ -239,6 +241,8 @@ async function updateAuthButton() {
       window.location.href = "./auth.html";
     });
   }
+
+  await syncMicAuthState();
 }
 
 
@@ -394,6 +398,28 @@ let conversationMemory = [];
 let activeChatId = localStorage.getItem("genie_activeChatId") || null;
 let speechRecognition = null;
 let voices = [];
+let sttSupported = false;
+let sttListening = false;
+let sttInitialized = false;
+let sttHasFinalInSession = false;
+let sttAutoSendTimer = null;
+const STT_AUTO_SEND_PAUSE_MS = 1200;
+let isRequestInFlight = false;
+
+function setComposerBusy(isBusy) {
+  isRequestInFlight = !!isBusy;
+  if (chatInput) {
+    chatInput.readOnly = isRequestInFlight;
+    chatInput.style.opacity = isRequestInFlight ? "0.85" : "";
+  }
+  if (sendChatBtn) sendChatBtn.disabled = isRequestInFlight;
+  if (imageUploadInput) imageUploadInput.disabled = isRequestInFlight;
+  if (imageUploadLabel) imageUploadLabel.setAttribute("aria-disabled", String(isRequestInFlight));
+  if (micBtn && isRequestInFlight) micBtn.disabled = true;
+  if (!isRequestInFlight) {
+    syncMicAuthState().catch(() => {});
+  }
+}
 
 // ================= INITIALIZATION =================
 // âœ… SINGLE DOMContentLoaded handler
@@ -402,6 +428,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Update auth button first
   await updateAuthButton();
+  if (supabaseClient?.auth?.onAuthStateChange) {
+    supabaseClient.auth.onAuthStateChange(async () => {
+      await updateAuthButton();
+      await syncMicAuthState();
+    });
+  }
   
   // Then initialize the rest
   await initializeApp();
@@ -517,6 +549,13 @@ function initEventListeners() {
     
     // Send message on Enter (without Shift)
     if (chatInput) {
+        const resizeComposer = () => {
+            chatInput.style.height = "44px";
+            chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
+        };
+        chatInput.addEventListener("input", resizeComposer);
+        resizeComposer();
+
         chatInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -747,6 +786,96 @@ async function openSession(chatId) {
     await loadSessionsSidebar();
 }
 
+function closeAllHistoryMenus() {
+    document.querySelectorAll(".history-item.menu-open").forEach((item) => {
+        item.classList.remove("menu-open");
+    });
+    document.querySelectorAll(".history-item-actions-menu.open").forEach((menu) => {
+        menu.classList.remove("open");
+        menu.classList.remove("open-up");
+    });
+}
+
+function positionHistoryMenu(li, menu) {
+    if (!li || !menu) return;
+    menu.classList.remove("open-up");
+    const listRect = historyList?.getBoundingClientRect?.() || null;
+    const menuRect = menu.getBoundingClientRect();
+    const limitBottom = listRect ? Math.min(listRect.bottom, window.innerHeight) : window.innerHeight;
+    if (menuRect.bottom > limitBottom - 8) {
+        menu.classList.add("open-up");
+    }
+}
+
+async function saveSessionTitle(chatId, title) {
+    const userId = await getUserId();
+    if (!userId) return false;
+    const sanitized = String(title || "").trim().slice(0, 60);
+    if (!sanitized) return false;
+    try {
+        const resp = await apiFetch(`${BACKEND_URL}/chat/${userId}/${chatId}/title`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: sanitized }),
+        });
+        return resp.ok;
+    } catch (error) {
+        console.error("❌ Error renaming session:", error);
+        return false;
+    }
+}
+
+function beginInlineRename(li, session) {
+    if (!li || li.classList.contains("renaming")) return;
+    const titleEl = li.querySelector(".history-title");
+    if (!titleEl) return;
+
+    li.classList.add("renaming");
+    const originalTitle = String(session.title || "New chat");
+    titleEl.innerHTML = "";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "history-title-input";
+    input.value = originalTitle;
+    input.maxLength = 60;
+    titleEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = async (save) => {
+        if (finished) return;
+        finished = true;
+        const next = input.value.trim();
+        li.classList.remove("renaming");
+
+        if (save && next && next !== originalTitle) {
+            const ok = await saveSessionTitle(session.chatId, next);
+            if (!ok) {
+                await loadSessionsSidebar();
+                return;
+            }
+        }
+        await loadSessionsSidebar();
+    };
+
+    input.addEventListener("keydown", async (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            await finish(true);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            await finish(false);
+        }
+    });
+
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("blur", async () => {
+        await finish(true);
+    });
+}
+
 async function loadSessionsSidebar() {
     const userId = await getUserId();
     if (!userId) return;
@@ -776,23 +905,58 @@ async function loadSessionsSidebar() {
             
             li.innerHTML = `
                 <span class="history-title">${escapeHtml(session.title || "New chat")}</span>
-                <span class="material-icons delete-icon" title="Delete chat">delete</span>
+                <button class="history-actions-btn material-symbols-outlined" type="button" title="More">more_horiz</button>
+                <div class="history-item-actions-menu">
+                  <button type="button" class="history-menu-item edit-item">
+                    <span class="material-symbols-outlined">edit</span>
+                    <span>Edit</span>
+                  </button>
+                  <button type="button" class="history-menu-item delete-item">
+                    <span class="material-symbols-outlined">delete</span>
+                    <span>Delete</span>
+                  </button>
+                </div>
             `;
             
             // Open chat on click
             li.addEventListener("click", (e) => {
-                if (e.target.classList.contains("delete-icon")) return;
+                if (e.target.closest(".history-actions-btn") || e.target.closest(".history-item-actions-menu")) return;
                 openSession(session.chatId);
             });
-            
-            // Delete chat
-            li.querySelector(".delete-icon").addEventListener("click", async (e) => {
+
+            const actionsBtn = li.querySelector(".history-actions-btn");
+            const menu = li.querySelector(".history-item-actions-menu");
+            actionsBtn?.addEventListener("click", (e) => {
                 e.stopPropagation();
+                const isOpen = menu.classList.contains("open");
+                closeAllHistoryMenus();
+                if (!isOpen) {
+                    menu.classList.add("open");
+                    li.classList.add("menu-open");
+                    requestAnimationFrame(() => positionHistoryMenu(li, menu));
+                }
+            });
+
+            li.querySelector(".edit-item")?.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                closeAllHistoryMenus();
+                beginInlineRename(li, session);
+            });
+
+            li.querySelector(".delete-item")?.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                closeAllHistoryMenus();
                 await deleteSession(session.chatId);
             });
             
             historyList.appendChild(li);
         });
+
+        // Keep an invisible spacer at the end so last-item menus never get clipped.
+        const spacer = document.createElement("li");
+        spacer.className = "history-list-spacer";
+        spacer.setAttribute("aria-hidden", "true");
+        historyList.appendChild(spacer);
     } catch (error) {
         console.error("âŒ Error loading sessions:", error);
         // Create styled error message
@@ -803,6 +967,12 @@ async function loadSessionsSidebar() {
         historyList.appendChild(errorLi);
     }
 }
+
+document.addEventListener("click", (e) => {
+    if (!e.target.closest(".history-item-actions-menu") && !e.target.closest(".history-actions-btn")) {
+        closeAllHistoryMenus();
+    }
+});
 
 async function loadChatFromServer(chatId) {
     const userId = await getUserId();
@@ -892,17 +1062,21 @@ async function deleteAllChats() {
 
 // 6. MESSAGE HANDLING
 function handleChat() {
+    if (isRequestInFlight) return;
     const userMessage = chatInput?.value.trim() || "";
     if (!chatInput) return;
     if (!userMessage && !pendingMediaSelected) return;
+    setComposerBusy(true);
 
     if (pendingMediaSelected && pendingMediaLoading) {
         alert("File is still loading. Please wait a moment and send again.");
+        setComposerBusy(false);
         return;
     }
     
     // Clear input
     chatInput.value = "";
+    chatInput.style.height = "44px";
 
     const imageData = pendingImageData;
     const imageName = pendingImageName;
@@ -927,6 +1101,7 @@ function handleChat() {
         );
         chatbox.appendChild(errorLi);
         chatbox.scrollTo(0, chatbox.scrollHeight);
+        setComposerBusy(false);
         return;
     }
 
@@ -960,7 +1135,10 @@ function handleChat() {
               }
             : null,
           requestMode,
-        );
+        ).catch((err) => {
+          console.error("generateResponse error:", err);
+          setComposerBusy(false);
+        });
     }, 600);
 }
 async function generateResponse(
@@ -975,6 +1153,7 @@ async function generateResponse(
 
   // Check for special commands
   if (await handleSpecialCommands(messageElement, userMessage)) {
+    setComposerBusy(false);
     return;
   }
 
@@ -1073,6 +1252,7 @@ async function generateResponse(
   } finally {
     if (timeout) clearTimeout(timeout);
     chatbox.scrollTo(0, chatbox.scrollHeight);
+    setComposerBusy(false);
   }
 }
 
@@ -1491,62 +1671,267 @@ function initSpeechSynthesis() {
 }
 
 // 10. MICROPHONE FUNCTIONALITY
+function setSpeechStatus(text) {
+    if (!speechStatus) return;
+    const raw = String(text || "").toLowerCase();
+    let icon = "mic";
+    let label = "Mic ready";
+
+    if (raw.includes("listening")) {
+        icon = "graphic_eq";
+        label = "Listening";
+    } else if (raw.includes("permission denied")) {
+        icon = "mic_off";
+        label = "Permission denied";
+    } else if (raw.includes("not supported")) {
+        icon = "warning";
+        label = "Speech-to-text not supported";
+    } else if (raw.includes("no internet")) {
+        icon = "wifi_off";
+        label = "No internet";
+    } else if (raw.includes("https required")) {
+        icon = "lock";
+        label = "HTTPS required";
+    } else if (raw.includes("login required")) {
+        icon = "person_off";
+        label = "Login required";
+    } else if (raw.includes("no microphone")) {
+        icon = "mic_off";
+        label = "No microphone";
+    } else if (raw.includes("error") || raw.includes("could not")) {
+        icon = "error";
+        label = "Speech recognition error";
+    } else if (raw.includes("stopped")) {
+        icon = "mic";
+        label = "Stopped";
+    }
+
+    speechStatus.textContent = icon;
+    speechStatus.setAttribute("aria-label", label);
+    speechStatus.setAttribute("title", label);
+    speechStatus.classList.toggle("listening", icon === "graphic_eq");
+}
+
+function appendFinalTranscript(text) {
+    if (!chatInput) return;
+    const cleaned = String(text || "").trim();
+    if (!cleaned) return;
+    const spacer = chatInput.value && !/\s$/.test(chatInput.value) ? " " : "";
+    chatInput.value += spacer + cleaned;
+    chatInput.style.height = "44px";
+    chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
+    chatInput.focus();
+}
+
+async function syncMicAuthState() {
+    if (!micBtn) return;
+    const session = await getSession();
+    const isLoggedIn = !!session;
+    const isAppView = document.body.classList.contains("app-view");
+    const enabled = isLoggedIn && (sttSupported || isAppView);
+    micBtn.disabled = !enabled;
+    micBtn.setAttribute("aria-disabled", String(!enabled));
+
+    if (!isLoggedIn) {
+        setSpeechStatus("Login required");
+    } else if (!sttSupported && !isAppView) {
+        setSpeechStatus("Speech-to-text not supported. Use Chrome or enable Google Speech Services.");
+    } else if (!sttSupported && isAppView) {
+        setSpeechStatus("Enable microphone permission in app settings");
+    } else if (!sttListening) {
+        setSpeechStatus("Stopped");
+    }
+}
+
 function initMicrophone() {
     if (!micBtn || !chatInput) return;
-    
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        micBtn.style.display = "none";
+    if (sttInitialized) {
+        syncMicAuthState().catch(console.error);
         return;
     }
-    
+    sttInitialized = true;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const isSecureOrigin =
+      window.isSecureContext ||
+      location.protocol === "https:" ||
+      location.hostname === "localhost" ||
+      location.hostname === "127.0.0.1";
+
+    sttSupported = !!SpeechRecognition && isSecureOrigin;
+    if (!isSecureOrigin) {
+        setSpeechStatus("HTTPS required for microphone");
+    } else if (!SpeechRecognition) {
+        setSpeechStatus("Speech-to-text not supported. Use Chrome or enable Google Speech Services.");
+    } else {
+        setSpeechStatus("Stopped");
+    }
+
+    if (!SpeechRecognition) {
+        syncMicAuthState().catch(console.error);
+        return;
+    }
+
     speechRecognition = new SpeechRecognition();
-    speechRecognition.lang = "en-US";
-    speechRecognition.interimResults = false;
-    speechRecognition.continuous = false;
-    
-    let isListening = false;
-    
-    micBtn.addEventListener("click", () => {
-        if (isListening) {
-            speechRecognition.stop();
+    speechRecognition.lang = navigator.language || "en-US";
+    speechRecognition.interimResults = true;
+    speechRecognition.continuous = true;
+    speechRecognition.maxAlternatives = 1;
+
+    micBtn.addEventListener("click", async () => {
+        const session = await getSession();
+        if (!session) {
+            micBtn.disabled = true;
+            setSpeechStatus("Login required");
             return;
         }
-        
+
+        // If native Android bridge exists, request runtime permission first.
         try {
+            if (window.Android && typeof window.Android.requestRecordAudioPermission === "function") {
+                window.Android.requestRecordAudioPermission();
+            }
+        } catch {}
+
+        if (sttListening) {
+            speechRecognition.stop();
+            setSpeechStatus("Stopped");
+            return;
+        }
+
+        try {
+            // Trigger audio permission prompt on browsers/WebView that support getUserMedia.
+            if (navigator.mediaDevices?.getUserMedia) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach((t) => t.stop());
+                } catch (permErr) {
+                    setSpeechStatus("Permission denied");
+                    return;
+                }
+            }
+
+            if (!sttSupported || !speechRecognition) {
+                setSpeechStatus("Speech-to-text not supported. Use Chrome or enable Google Speech Services.");
+                return;
+            }
+
+            setSpeechStatus("Listening...");
             speechRecognition.start();
         } catch (error) {
-            console.error("Microphone error:", error);
-            alert("Please allow microphone permission.");
+            console.error("Microphone start error:", error);
+            if (String(error?.name || "").toLowerCase().includes("notallowed")) {
+                setSpeechStatus("Permission denied");
+            } else {
+                setSpeechStatus("Could not start microphone");
+            }
         }
     });
-    
+
     speechRecognition.onstart = () => {
-        isListening = true;
+        sttListening = true;
+        sttHasFinalInSession = false;
+        if (sttAutoSendTimer) {
+            clearTimeout(sttAutoSendTimer);
+            sttAutoSendTimer = null;
+        }
         micBtn.classList.add("listening");
         micBtn.textContent = "mic_off";
+        setSpeechStatus("Listening...");
     };
-    
+
     speechRecognition.onend = () => {
-        isListening = false;
+        sttListening = false;
+        if (sttAutoSendTimer) {
+            clearTimeout(sttAutoSendTimer);
+            sttAutoSendTimer = null;
+        }
         micBtn.classList.remove("listening");
         micBtn.textContent = "mic";
-    };
-    
-    speechRecognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        if (chatInput) {
-            chatInput.value = transcript;
+        const shouldAutoSend = sttHasFinalInSession && !!chatInput?.value.trim();
+        sttHasFinalInSession = false;
+        if (navigator.onLine) {
+            setSpeechStatus("Stopped");
+        }
+        if (shouldAutoSend) {
             handleChat();
         }
     };
-    
+
+    speechRecognition.onresult = (event) => {
+        let finalText = "";
+        let interimText = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const part = event.results[i]?.[0]?.transcript || "";
+            if (event.results[i].isFinal) finalText += part;
+            else interimText += part;
+        }
+
+        if (finalText) {
+            sttHasFinalInSession = true;
+            appendFinalTranscript(finalText);
+            const sentenceComplete = /[.!?]\s*$/.test(finalText.trim());
+            if (sttAutoSendTimer) {
+                clearTimeout(sttAutoSendTimer);
+                sttAutoSendTimer = null;
+            }
+            sttAutoSendTimer = setTimeout(() => {
+                if (!sttListening || !chatInput?.value.trim()) return;
+                handleChat();
+                sttHasFinalInSession = false;
+                sttAutoSendTimer = null;
+            }, sentenceComplete ? 180 : STT_AUTO_SEND_PAUSE_MS);
+        }
+
+        if (interimText && sttListening) {
+            setSpeechStatus(`Listening... ${interimText.trim()}`);
+        } else if (sttListening) {
+            setSpeechStatus("Listening...");
+        }
+    };
+
     speechRecognition.onerror = (event) => {
         console.error("Speech recognition error:", event.error);
-        isListening = false;
+        sttListening = false;
+        if (sttAutoSendTimer) {
+            clearTimeout(sttAutoSendTimer);
+            sttAutoSendTimer = null;
+        }
         micBtn.classList.remove("listening");
         micBtn.textContent = "mic";
+
+        switch (event.error) {
+            case "not-allowed":
+            case "service-not-allowed":
+                setSpeechStatus("Permission denied");
+                break;
+            case "network":
+                setSpeechStatus("No internet");
+                break;
+            case "no-speech":
+                setSpeechStatus("No speech detected");
+                break;
+            case "audio-capture":
+                setSpeechStatus("No microphone available");
+                break;
+            default:
+                setSpeechStatus("Speech recognition error");
+                break;
+        }
     };
+
+    window.addEventListener("offline", () => {
+        if (sttListening && speechRecognition) {
+            try { speechRecognition.stop(); } catch {}
+        }
+        if (sttAutoSendTimer) {
+            clearTimeout(sttAutoSendTimer);
+            sttAutoSendTimer = null;
+        }
+        setSpeechStatus("No internet");
+    });
+
+    syncMicAuthState().catch(console.error);
 }
 
 // 11. UTILITY FUNCTIONS

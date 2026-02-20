@@ -73,24 +73,21 @@
 
     <!-- Sidebar for chat history -->
     <div class="history-sidebar">
-      <!-- HEADER -->
-      <div class="history-header">
-        <div class="history-actions">
-          <!-- NEW CHAT -->
-          <button id="new-chat-btn" class="new-chat-btn" type="button">
-            <span class="material-symbols-outlined">add</span>
-            <span class="new-chat-text">New chat</span>
-          </button>
+      <div class="history-actions">
+        <!-- NEW CHAT -->
+        <button id="new-chat-btn" class="new-chat-btn" type="button">
+          <span class="material-symbols-outlined">add</span>
+          <span class="new-chat-text">New chat</span>
+        </button>
 
-          <!-- CLOSE SIDEBAR -->
-          <button
-            id="close-sidebar"
-            class="material-symbols-outlined close-sidebar-btn"
-            type="button"
-          >
-            close
-          </button>
-        </div>
+        <!-- CLOSE SIDEBAR -->
+        <button
+          id="close-sidebar"
+          class="material-symbols-outlined close-sidebar-btn"
+          type="button"
+        >
+          close
+        </button>
       </div>
 
       <!-- DELETE ALL -->
@@ -103,6 +100,13 @@
       <ul class="history-list">
         <!-- sessions will render here -->
       </ul>
+
+      <div class="sidebar-footer">
+        <button id="auth-btn" type="button">
+          <span class="material-symbols-outlined">person</span>
+          <span class="auth-text">Login</span>
+        </button>
+      </div>
     </div>
 
     <div class="container">
@@ -136,11 +140,6 @@
               <span class="apk-text">APK</span>
             </a>
 
-            <button id="auth-btn" type="button">
-              <span class="material-symbols-outlined">person</span>
-              <span class="auth-text">Login</span>
-            </button>
-
             <button id="mode-toggle" type="button">
               <span class="material-symbols-outlined">dark_mode</span>
             </button>
@@ -168,7 +167,22 @@
 
         <div class="chat-input">
           <div id="selected-media-preview" class="selected-media-preview" style="display: none"></div>
+          <label
+            for="image-upload"
+            class="upload-icon"
+            title="Upload files"
+          >
+            +
+          </label>
+          <input type="file" id="image-upload" accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.xml,.html,.css,.js,.ts,.py,.java,.c,.cpp" style="display: none" />
           <textarea placeholder="Ask anything with GENIE..." spellcheck="false" required></textarea>
+          <span
+            id="speech-status"
+            class="speech-status material-symbols-outlined"
+            aria-live="polite"
+            aria-label="Mic ready"
+            title="Mic ready"
+          >mic</span>
           <button
             id="mic-btn"
             class="material-symbols-outlined"
@@ -177,17 +191,12 @@
           >
             mic
           </button>
-          <label
-            for="image-upload"
-            class="material-icons upload-icon"
-            title="Upload Media"
-          >
-            image
-          </label>
-          <input type="file" id="image-upload" accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.xml,.html,.css,.js,.ts,.py,.java,.c,.cpp" style="display: none" />
           <button id="send-btn" class="material-symbols-outlined" type="button">
             send
           </button>
+        </div>
+        <div class="chat-footer-note">
+          Genie can make mistakes. Check important info.
         </div>
       </div>
     </div>
