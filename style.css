@@ -1292,21 +1292,24 @@ body.app-view .chatbot .chat-input {
 .chat.incoming .bot-message-container {
   display: flex;
   flex-direction: column;
+  gap: 6px;
   position: relative;
   max-width: 80%;
 }
 
 .chat.incoming .bot-message-container p {
-  padding-bottom: 26px;
+  padding-bottom: 0;
 }
 
 .chat.incoming .msg-actions {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+  position: static;
   display: flex;
+  justify-content: flex-start;
+  align-self: flex-start;
   gap: 10px;
   align-items: center;
+  margin-top: 2px;
+  padding-left: 2px;
 }
 
 .chat.incoming .msg-actions .copy-btn,
@@ -1820,8 +1823,11 @@ body.light-mode .history-list .error {
   
   /* Message actions on mobile */
   .chat.incoming .msg-actions {
-    right: 10px !important;
-    bottom: 5px !important;
+    position: static !important;
+    justify-content: flex-start !important;
+    align-self: flex-start !important;
+    margin-top: 4px !important;
+    padding-left: 2px !important;
   }
   
   /* Typing indicator spacing */

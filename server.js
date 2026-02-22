@@ -32,6 +32,16 @@ function normalizeInlineCodeArtifacts(text) {
       .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`")
   );
 }
+
+function repairMarkdownCodeFences(text) {
+  const input = String(text || "");
+  if (!input) return "";
+
+  // If fenced code blocks are unbalanced, close the last fence to avoid broken rendering.
+  const fenceCount = (input.match(/```/g) || []).length;
+  if (fenceCount % 2 === 0) return input;
+  return `${input}\n\`\`\``;
+}
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://nikzyppkwedmzldghrgh.supabase.co";
@@ -159,7 +169,44 @@ function getOptimizedParams(message) {
     maxTokens: isCodeHeavy ? MAX_RESPONSE_TOKENS : 1000,
     timeout: isCodeHeavy ? 60000 : 30000,
     historyLimit: isCodeHeavy ? 8 : 12,
+    temperature: isCodeHeavy ? 0.25 : 0.6,
   };
+}
+
+function buildChatSystemPrompt({ isCodeHeavy = false } = {}) {
+  const codingMode = isCodeHeavy
+    ? "When coding is requested, provide complete runnable code with exact file names and minimal required steps."
+    : "When coding is requested, provide practical snippets and avoid unnecessary verbosity.";
+
+  return [
+    "You are Genie, a reliable AI assistant for practical help.",
+    "Reply in the same language as the user's latest message unless the user asks for another language.",
+    "Be clear, direct, and helpful. Avoid filler and repetition.",
+    codingMode,
+    "For any multi-line code, always use fenced markdown code blocks with triple backticks and a language tag when known.",
+    "Do not leave code fences unclosed.",
+    "Never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
+    "Always format inline code with backticks (example: `nums`).",
+    "If information is uncertain, state assumptions briefly instead of guessing facts.",
+  ].join(" ");
+}
+
+function buildMediaSystemPrompt(mimeType = "") {
+  const mime = String(mimeType || "").toLowerCase();
+  const extractionMode =
+    mime.startsWith("image/") || mime === "application/pdf"
+      ? "For images and PDFs, prioritize accurate extraction over paraphrasing."
+      : "For text files, preserve key structure and summarize only when useful.";
+
+  return [
+    "You analyze uploaded media and answer clearly and accurately.",
+    extractionMode,
+    "Do not invent details. If content is unreadable, mark it as [unclear].",
+    "If the user asks for actions on the file, provide step-by-step output.",
+    "For any multi-line code, always use fenced markdown code blocks with triple backticks and a language tag when known.",
+    "Do not leave code fences unclosed.",
+    "Always format inline code with backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
+  ].join(" ");
 }
 
 function isTextLikeMime(mimeType) {
@@ -708,16 +755,15 @@ async function analyzeMediaHandler(req, res) {
     const mediaMaxTokens = Number(process.env.MEDIA_MAX_TOKENS || 4096);
     const mediaTemperature = Number(process.env.MEDIA_TEMPERATURE || 0.1);
     const rawReply = await callGeminiGenerateContent({
-      systemInstruction:
-        "You analyze uploaded media and answer clearly and accurately. For images and PDFs, prefer verbatim extraction over paraphrasing. Do not invent text. If any text is unreadable, mark it as [unclear]. Always write real inline code using backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
+      systemInstruction: buildMediaSystemPrompt(mimeType),
       contents: [{ role: "user", parts: userParts }],
       temperature: mediaTemperature,
       maxOutputTokens: mediaMaxTokens,
       model: GEMINI_MEDIA_MODEL,
     });
 
-    const reply = normalizeInlineCodeArtifacts(
-      rawReply || "I could not analyze this file.",
+    const reply = repairMarkdownCodeFences(
+      normalizeInlineCodeArtifacts(rawReply || "I could not analyze this file."),
     );
 
     await saveMessage(
@@ -846,8 +892,9 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     const messagesForAI = [];
     messagesForAI.push({
       role: "system",
-      content:
-        "You are Genie, a helpful AI assistant. Be concise and helpful. Always write real inline code using backticks like `nums` and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
+      content: buildChatSystemPrompt({
+        isCodeHeavy: optimizedParams.isCodeHeavy,
+      }),
     });
     const recentHistory = history.slice(-optimizedParams.historyLimit);
     let lastRole = "system";
@@ -884,7 +931,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         model: "sarvam-m",
         messages: messagesForAI,
         max_tokens: optimizedParams.maxTokens,
-        temperature: 0.7,
+        temperature: optimizedParams.temperature,
       }),
       signal: controller.signal,
     });
@@ -917,8 +964,10 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     }
 
     const data = await response.json();
-    const reply = normalizeInlineCodeArtifacts(
-      data.choices?.[0]?.message?.content || "No response.",
+    const reply = repairMarkdownCodeFences(
+      normalizeInlineCodeArtifacts(
+        data.choices?.[0]?.message?.content || "No response.",
+      ),
     );
 
     // âœ… SAVE MESSAGES
