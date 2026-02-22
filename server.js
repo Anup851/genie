@@ -134,6 +134,167 @@ function sanitizeInput(text) {
   return text.slice(0, MAX_MESSAGE_LENGTH).trim();
 }
 
+// Current server time in IST for deterministic date/time answers.
+function getISTString() {
+  const now = new Date();
+  const dtf = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(now);
+  const get = (type) => parts.find((p) => p.type === type)?.value || "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")} IST`;
+}
+
+function isNewsQuery(message) {
+  const text = String(message || "").toLowerCase();
+  return /\b(news|latest|today|current events?|breaking|headlines?|what happened)\b/.test(
+    text,
+  );
+}
+
+function simplifyNewsQuery(raw) {
+  const input = String(raw || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ");
+  const stop = new Set([
+    "the",
+    "a",
+    "an",
+    "of",
+    "in",
+    "on",
+    "at",
+    "for",
+    "to",
+    "and",
+    "or",
+    "is",
+    "are",
+    "was",
+    "were",
+    "what",
+    "happened",
+    "today",
+    "latest",
+    "news",
+    "current",
+    "events",
+    "breaking",
+    "headlines",
+    "new",
+    "about",
+  ]);
+  const terms = input
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w && !stop.has(w));
+  if (!terms.length) return "current world news";
+  return terms.slice(0, 6).join(" ");
+}
+
+function inferNewsTimespan(rawQuery) {
+  const text = String(rawQuery || "").toLowerCase();
+  if (
+    /\b(last\s*24\s*hours?|24\s*hours?|today|current|latest|now)\b/.test(text)
+  ) {
+    return "24h";
+  }
+  return "";
+}
+
+function buildNewsQueryCandidates(rawQuery) {
+  const raw = String(rawQuery || "").trim();
+  const simple = simplifyNewsQuery(raw);
+  const candidates = [];
+  if (raw) candidates.push(raw);
+  if (simple && simple !== raw) candidates.push(simple);
+  if (simple) candidates.push(`${simple} sourcelang:english`);
+
+  // Topic-focused fallback when user asks very broad news.
+  if (/\bindia\b/i.test(raw) && !/\bindia\b/i.test(simple)) {
+    candidates.push(`india sourcelang:english`);
+  } else if (/\bindia\b/i.test(raw)) {
+    candidates.push(`india ${simple} sourcelang:english`);
+  }
+
+  // Deduplicate while preserving order.
+  return Array.from(new Set(candidates.map((q) => q.trim()).filter(Boolean)));
+}
+
+async function fetchGdeltDocJson(query, maxRecords, timespan = "") {
+  const params = new URLSearchParams({
+    query,
+    mode: "ArtList",
+    maxrecords: String(maxRecords),
+    format: "json",
+    sort: "hybridrel",
+  });
+  if (timespan) params.set("timespan", timespan);
+
+  const url = `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "GenieChatbot/1.0 (+gdelt-doc2.1)",
+    },
+  });
+
+  const rawText = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `GDELT request failed: ${response.status} ${rawText.slice(0, 160)}`,
+    );
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    throw new Error(`GDELT non-JSON response: ${rawText.slice(0, 220)}`);
+  }
+}
+
+async function fetchGdeltArticles(query, maxRecords = 10) {
+  const q = String(query || "").trim();
+  const safeMax = Math.max(1, Math.min(Number(maxRecords) || 10, 20));
+  if (!q) return [];
+
+  const timespan = inferNewsTimespan(q);
+  const candidates = buildNewsQueryCandidates(q);
+  let lastError = null;
+
+  for (const candidate of candidates) {
+    try {
+      const data = await fetchGdeltDocJson(candidate, safeMax, timespan);
+      const articles = Array.isArray(data?.articles) ? data.articles : [];
+      if (!articles.length) continue;
+      return articles.map((a) => ({
+        title: String(a?.title || "").trim() || null,
+        source:
+          String(a?.sourceCommonName || a?.domain || a?.source || "").trim() ||
+          null,
+        url: String(a?.url || "").trim() || null,
+        published:
+          String(a?.seendate || a?.date || a?.publishDateTime || "").trim() ||
+          null,
+      }));
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return [];
+}
+
 function sessionsKey(userId) {
   return `sessions_${userId}`;
 }
@@ -206,6 +367,14 @@ function buildMediaSystemPrompt(mimeType = "") {
     "For any multi-line code, always use fenced markdown code blocks with triple backticks and a language tag when known.",
     "Do not leave code fences unclosed.",
     "Always format inline code with backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
+  ].join(" ");
+}
+
+// Build deterministic instruction context used for Sarvam requests.
+function buildSarvamInstructionBlock(nowIST) {
+  return [
+    `Current date/time is: ${nowIST}. If the user asks for time/date/day, use this. Do not guess.`,
+    "If NEWS_RESULTS is present, use ONLY NEWS_RESULTS for current events. If empty, say you don't have live news results. Do NOT guess.",
   ].join(" ");
 }
 
@@ -643,6 +812,31 @@ app.get("/", (req, res) => {
   });
 });
 
+// Debug time endpoint (server clock in IST + ISO)
+app.get("/api/time", (req, res) => {
+  res.json({
+    now_ist: getISTString(),
+    now_iso: new Date().toISOString(),
+  });
+});
+
+// Live news endpoint via GDELT
+app.get("/api/news", async (req, res) => {
+  try {
+    const query = String(req.query.q || "").trim();
+    const max = Math.max(1, Math.min(Number(req.query.max) || 10, 20));
+    if (!query) {
+      return res.json({ query, articles: [] });
+    }
+
+    const articles = await fetchGdeltArticles(query, max);
+    return res.json({ query, articles });
+  } catch (err) {
+    console.error("/api/news error:", err);
+    return res.status(500).json({ error: "Failed to fetch live news" });
+  }
+});
+
 // Create new session
 app.post("/chat/new", supabaseAuthRequired, async (req, res) => {
   const userId = req.auth?.sub;
@@ -804,6 +998,39 @@ async function analyzeMediaHandler(req, res) {
 
 app.post("/analyze-media", supabaseAuthRequired, analyzeMediaHandler);
 app.post("/analyze-image", supabaseAuthRequired, analyzeMediaHandler);
+
+// Save client-side/manual replies (e.g., weather special command) into chat history.
+app.post("/chat/manual", supabaseAuthRequired, async (req, res) => {
+  const userId = req.auth?.sub;
+  const { message, reply, chatId } = req.body || {};
+  const activeChatId = chatId || "default";
+
+  if (!userId || !String(message || "").trim() || !String(reply || "").trim()) {
+    return res.status(400).json({ error: "Invalid request" });
+  }
+
+  try {
+    if (activeChatId !== "default") {
+      await ensureSession(userId, activeChatId);
+    }
+
+    await saveMessage(userId, "user", String(message).trim(), activeChatId);
+    await saveMessage(userId, "assistant", String(reply).trim(), activeChatId);
+
+    const history = await getChatHistory(userId, activeChatId);
+    const isFirstMessage = history.length <= 2;
+    if (isFirstMessage) {
+      await touchSession(userId, activeChatId, String(message).trim());
+    } else {
+      await touchSession(userId, activeChatId);
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ /chat/manual error:", err);
+    return res.status(500).json({ error: "Failed to save manual chat" });
+  }
+});
 // ============================================================
 // MAIN CHAT ENDPOINT - WITH SESSION LIMIT WARNING
 // ============================================================
@@ -835,6 +1062,23 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
 
     const sanitizedMessage = message.trim();
     const optimizedParams = getOptimizedParams(sanitizedMessage);
+    const nowIST = getISTString();
+    const wantsNews = isNewsQuery(sanitizedMessage);
+    let newsArticles = [];
+    let newsFetchFailed = false;
+
+    if (wantsNews) {
+      try {
+        // Use simplified topic text for better GDELT hit rate.
+        newsArticles = await fetchGdeltArticles(
+          simplifyNewsQuery(sanitizedMessage),
+          10,
+        );
+      } catch (newsErr) {
+        newsFetchFailed = true;
+        console.error("/chat news fetch error:", newsErr);
+      }
+    }
 
     console.log(
       `ðŸ’¬ Chat request: ${userId.slice(0, 8)}... | ${sanitizedMessage.length} chars | chatId: ${activeChatId}`,
@@ -890,28 +1134,53 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
 
     // âœ… BUILD MESSAGES FOR AI
     const messagesForAI = [];
+    const instructionBlock = buildSarvamInstructionBlock(nowIST);
     messagesForAI.push({
       role: "system",
-      content: buildChatSystemPrompt({
-        isCodeHeavy: optimizedParams.isCodeHeavy,
-      }),
+      content: [
+        buildChatSystemPrompt({
+          isCodeHeavy: optimizedParams.isCodeHeavy,
+        }),
+        instructionBlock,
+      ].join(" "),
     });
     const recentHistory = history.slice(-optimizedParams.historyLimit);
-    let lastRole = "system";
-
+    // Preserve history order; do not drop same-role consecutive messages.
     for (const msg of recentHistory) {
-      if (msg.role && msg.message && msg.role !== lastRole) {
-        messagesForAI.push({
-          role: msg.role,
-          content: msg.message,
-        });
-        lastRole = msg.role;
-      }
+      if (!msg?.role || !msg?.message) continue;
+      if (msg.role !== "user" && msg.role !== "assistant") continue;
+      messagesForAI.push({
+        role: msg.role,
+        content: String(msg.message),
+      });
     }
 
+    let userContent = sanitizedMessage;
+    if (wantsNews) {
+      let newsBlock = "NEWS_RESULTS: EMPTY";
+      if (newsArticles.length > 0) {
+        const top = newsArticles.slice(0, 10);
+        const lines = top.map((a, i) => {
+          const title = a.title || "[No title]";
+          const source = a.source || "[Unknown source]";
+          const published = a.published || "[Unknown time]";
+          const url = a.url || "[No URL]";
+          return `${i + 1}) ${title} — ${source} — ${published} — ${url}`;
+        });
+        newsBlock = `NEWS_RESULTS:\n${lines.join("\n")}`;
+      } else if (newsFetchFailed) {
+        newsBlock = "NEWS_RESULTS: EMPTY (live news fetch failed)";
+      }
+      userContent = `${newsBlock}\n\nUSER_MESSAGE:\n${sanitizedMessage}`;
+    }
+
+    // Ensure first non-system message is user for stricter gateways.
+    while (messagesForAI.length > 1 && messagesForAI[1].role !== "user") {
+      messagesForAI.splice(1, 1);
+    }
     messagesForAI.push({
       role: "user",
-      content: sanitizedMessage,
+      content: userContent,
     });
 
     // âœ… CALL SARVAM AI
@@ -921,17 +1190,22 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
       optimizedParams.timeout,
     );
 
-    const response = await fetch("https://api.sarvam.ai/v1/chat/completions", {
+    const sarvamUrl = "https://api.sarvam.ai/v1/chat/completions";
+    const sarvamHeaders = {
+      "Content-Type": "application/json",
+      "api-subscription-key": process.env.SARVAM_API_KEY,
+    };
+    const basePayload = {
+      model: "sarvam-m",
+      max_tokens: optimizedParams.maxTokens,
+      temperature: optimizedParams.temperature,
+    };
+    let response = await fetch(sarvamUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-subscription-key": process.env.SARVAM_API_KEY,
-      },
+      headers: sarvamHeaders,
       body: JSON.stringify({
-        model: "sarvam-m",
+        ...basePayload,
         messages: messagesForAI,
-        max_tokens: optimizedParams.maxTokens,
-        temperature: optimizedParams.temperature,
       }),
       signal: controller.signal,
     });
@@ -939,7 +1213,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorText = await response.text();
       console.error(
         "âŒ Sarvam error:",
         response.status,
@@ -950,17 +1224,46 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         response.status === 400 &&
         errorText.includes("First message must be from user")
       ) {
-        console.log("ðŸ”„ Corrupted chat detected, force cleaning...");
-        await forceCleanChat(userId, activeChatId);
+        // Retry once with system instructions moved into first user message.
+        const fallbackMessages = [];
+        const historyOnly = messagesForAI.filter((m) => m.role !== "system");
+        const baseUserContent =
+          historyOnly.length && historyOnly[0].role === "user"
+            ? historyOnly[0].content
+            : userContent;
+        fallbackMessages.push({
+          role: "user",
+          content: `[INSTRUCTION]\n${instructionBlock}\n\n${baseUserContent}`,
+        });
+        for (const m of historyOnly) {
+          if (m === historyOnly[0]) continue;
+          fallbackMessages.push(m);
+        }
+
+        response = await fetch(sarvamUrl, {
+          method: "POST",
+          headers: sarvamHeaders,
+          body: JSON.stringify({
+            ...basePayload,
+            messages: fallbackMessages,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          errorText = await response.text();
+          console.error(
+            "âŒ Sarvam retry error:",
+            response.status,
+            errorText.substring(0, 200),
+          );
+        }
+      }
+      if (!response.ok) {
         return res.status(200).json({
-          reply: "ðŸ”„ Chat cleaned. Please send your message again.",
-          needsRetry: true,
+          reply: "Sorry, AI service error. Please try again.",
         });
       }
-
-      return res.status(200).json({
-        reply: "Sorry, AI service error. Please try again.",
-      });
     }
 
     const data = await response.json();

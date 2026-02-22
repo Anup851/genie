@@ -379,6 +379,24 @@ style.textContent = `
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  .weather-reply-box {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(148, 163, 184, 0.12);
+    padding: 10px 12px;
+    line-height: 1.6;
+    white-space: pre-line;
+  }
+
+  body.light-mode .weather-reply-box {
+    background: rgba(15, 23, 42, 0.06);
+    border-color: rgba(15, 23, 42, 0.18);
+    color: #0f172a;
+  }
 `;
 document.head.appendChild(style);
 
@@ -1001,7 +1019,7 @@ async function loadChatFromServer(chatId) {
                 const li = createChatLi("", "incoming");
                 const content = li.querySelector(".bot-message-content");
 
-                content.innerHTML = parseFencedBlocks(msg.message);
+                renderAssistantMessage(content, msg.message);
 
                 if (window.Prism) Prism.highlightAllUnder(content);
                 enableCopyButtons(content);
@@ -1286,23 +1304,38 @@ async function handleSpecialCommands(messageElement, userMessage) {
     const lowerMessage = userMessage.toLowerCase();
     
     // Weather command
-    if (lowerMessage.includes("weather") || lowerMessage.includes("temperature")) {
-        const cityMatch = userMessage.match(/weather|temperature\s+(?:in|at|for)?\s*([a-zA-Z\s]+)/i);
+    if (
+        lowerMessage.includes("weather") ||
+        lowerMessage.includes("temperature") ||
+        lowerMessage.includes("forecast") ||
+        lowerMessage.includes("rain")
+    ) {
+        const cleaned = userMessage
+            .replace(/[?.,!]+$/g, "")
+            .trim();
+        const cityMatch = cleaned.match(
+            /(?:weather|temperature|forecast|rain)\s*(?:in|at|for)?\s*([a-zA-Z\s-]{2,})$/i
+        );
         let city = cityMatch ? cityMatch[1].trim() : "";
         
         if (!city) {
-            const words = userMessage.split(" ");
-            city = words[words.length - 1];
+            const tokens = cleaned.split(/\s+/);
+            city = tokens.slice(-2).join(" ").trim();
+            if (!/[a-zA-Z]/.test(city)) city = "";
         }
         
         if (!city) {
-            messageElement.innerHTML = "Please specify a location for the weather.";
+            const replyText = "Please specify a location for the weather.";
+            await renderTypedBoxReply(messageElement, replyText);
+            await persistManualExchange(userMessage, replyText);
             return true;
         }
         
         const weatherData = await fetchWeather(city);
         if (!weatherData) {
-            messageElement.innerHTML = `Sorry, I couldn't find weather data for "${city}".`;
+            const replyText = `Sorry, I couldn't find weather data for "${city}".`;
+            await renderTypedBoxReply(messageElement, replyText);
+            await persistManualExchange(userMessage, replyText);
             return true;
         }
         
@@ -1312,13 +1345,14 @@ async function handleSpecialCommands(messageElement, userMessage) {
         const cityName = weatherData.name;
         const country = weatherData.sys.country;
         
-        const weatherReply = `ðŸŒ¤ï¸ Weather in ${cityName}, ${country}:<br>
-        Temperature: ${temp}Â°C (feels like ${feels_like}Â°C)<br>
-        Condition: ${description}<br>
-        Humidity: ${humidity}%<br>
-        Wind Speed: ${windSpeed} m/s`;
-        
-        messageElement.innerHTML = weatherReply;
+        const weatherReply = `🌤️ Weather in ${cityName}, ${country}:
+Temperature: ${temp}°C (feels like ${feels_like}°C)
+Condition: ${description}
+Humidity: ${humidity}%
+Wind Speed: ${windSpeed} m/s`;
+
+        await renderTypedBoxReply(messageElement, weatherReply);
+        await persistManualExchange(userMessage, weatherReply);
         return true;
     }
     
@@ -1332,10 +1366,66 @@ async function handleSpecialCommands(messageElement, userMessage) {
     return false;
 }
 
+async function persistManualExchange(userMessage, assistantReply) {
+    try {
+        if (!activeChatId) return;
+        await apiFetch(`${BACKEND_URL}/chat/manual`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chatId: activeChatId,
+                message: String(userMessage || "").trim(),
+                reply: String(assistantReply || "").trim(),
+            }),
+        });
+    } catch (error) {
+        console.error("Failed to persist manual exchange:", error);
+    }
+}
+
+function isWeatherReplyText(text) {
+    const t = String(text || "");
+    return /^🌤️\s*Weather in .+:/m.test(t) && /Temperature:/i.test(t);
+}
+
+function renderAssistantMessage(contentElement, messageText) {
+    const text = String(messageText || "");
+    if (isWeatherReplyText(text)) {
+        const box = document.createElement("div");
+        box.className = "weather-reply-box";
+        box.textContent = text;
+        contentElement.innerHTML = "";
+        contentElement.appendChild(box);
+        return;
+    }
+    contentElement.innerHTML = parseFencedBlocks(text);
+}
+
+async function renderTypedBoxReply(messageElement, text) {
+    const box = document.createElement("div");
+    box.className = "weather-reply-box";
+    messageElement.innerHTML = "";
+    messageElement.appendChild(box);
+
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reducedMotion) {
+        box.textContent = String(text || "");
+        return;
+    }
+
+    box.textContent = "";
+    for (const ch of String(text || "")) {
+        box.textContent += ch;
+        await new Promise((resolve) => setTimeout(resolve, 12));
+    }
+}
+
 async function fetchWeather(city) {
     try {
+        const safeCity = encodeURIComponent(String(city || "").trim());
+        if (!safeCity) return null;
         const resp = await fetch(
-            `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
+            `https://api.openweathermap.org/data/2.5/weather?q=${safeCity}&appid=${WEATHER_API_KEY}&units=metric`
         );
         return resp.ok ? await resp.json() : null;
     } catch {
