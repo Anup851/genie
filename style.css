@@ -758,7 +758,7 @@ body:not(.chat-started) #sidebar-toggle {
     z-index: 1002 !important;
     padding: 8px !important;
     border-radius: 50% !important;
-    background: rgba(0, 0, 0, 0.3) !important;
+   
     backdrop-filter: blur(10px) !important;
     width: 44px;
     height: 44px;
@@ -1878,11 +1878,14 @@ body.light-mode .history-list .error {
     position: absolute !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
-    bottom: 14px !important;
+    bottom: 8px !important;
     top: auto !important;
     margin: 0 !important;
     width: auto !important;
-    max-width: 60% !important;
+    max-width: calc(100% - 132px) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
     text-align: center !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -1973,9 +1976,25 @@ body.light-mode .history-list .error {
 /* FORCE Genie dead-center */
 .chat-title{
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0px;
   text-align: center;
   justify-self: center;
   pointer-events: none;
+}
+
+.chat-title-logo{
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  mix-blend-mode: screen;
+  background: transparent !important;
+}
+
+.chat-title-text{
+  line-height: 1;
 }
 
 /* ================= APK BUTTON ================= */
@@ -2140,15 +2159,24 @@ body.app-view .chatbot header h2{
   position: absolute !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  bottom: 14px !important;
+  bottom: 8px !important;
   top: auto !important;
   margin: 0 !important;
   width: auto !important;
-  max-width: 60% !important;
+  max-width: calc(100% - 132px) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
   text-align: center !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
+}
+
+body.app-view .chatbot header .chat-title-logo{
+  width: 60px !important;
+  height: 60px !important;
+  background: transparent !important;
 }
 
 body.app-view .chatbot header #mode-toggle{
@@ -2204,12 +2232,15 @@ body.app-view .auth-header-btn{
     left: 50% !important;
     transform: translateX(-50%) !important;
 
-    bottom: 14px !important;          /* ⬅ a bit higher than buttons */
+    bottom: 8px !important;
     top: auto !important;
 
     margin: 0 !important;
     width: auto !important;
-    max-width: 60% !important;
+    max-width: calc(100% - 132px) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
     text-align: center !important;
 
     white-space: nowrap !important;
@@ -2240,6 +2271,12 @@ body.app-view .auth-header-btn{
 
 /* Final lock: mode toggle must stay at far-right on mobile + app-view */
 @media (max-width: 480px) {
+  .chat-title-logo{
+    width: 60px;
+    height: 60px;
+    background: transparent !important;
+  }
+
   body.chat-started .chatbot header #mode-toggle,
   body.app-view .chatbot header #mode-toggle {
     position: absolute !important;
@@ -2398,7 +2435,3 @@ body:not(.app-view) .chatbot header #auth-btn {
     max-width: none !important;
   }
 }
-
-
-
-

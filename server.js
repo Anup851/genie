@@ -25,10 +25,12 @@ const GEMINI_API_VERSION = String(
 ).trim();
 
 function normalizeInlineCodeArtifacts(text) {
-  return String(text || "")
-    // Wrap leaked placeholder tokens as inline markdown code without changing content.
-    .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*_?\s*\d+\s*@{1,2})/gi, "`$1`")
-    .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`");
+  return (
+    String(text || "")
+      // Wrap leaked placeholder tokens as inline markdown code without changing content.
+      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*_?\s*\d+\s*@{1,2})/gi, "`$1`")
+      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`")
+  );
 }
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL =
@@ -179,7 +181,10 @@ function mapRoleForGemini(role) {
 function extractGeminiText(data) {
   const parts = data?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return "";
-  return parts.map((p) => p?.text || "").join("").trim();
+  return parts
+    .map((p) => p?.text || "")
+    .join("")
+    .trim();
 }
 
 async function callGeminiGenerateContent({
@@ -1021,33 +1026,39 @@ app.delete("/chat/:userId/:chatId", supabaseAuthRequired, async (req, res) => {
   }
 });
 
-app.put("/chat/:userId/:chatId/title", supabaseAuthRequired, async (req, res) => {
-  const userId = req.auth?.sub;
-  const { chatId } = req.params;
-  const title = String(req.body?.title || "").trim().slice(0, 60);
-  if (!userId || !chatId) {
-    return res.status(400).json({ error: "Invalid userId or chatId" });
-  }
-  if (!title) {
-    return res.status(400).json({ error: "Invalid title" });
-  }
-  try {
-    const sessions = await listSessions(userId);
-    const idx = sessions.findIndex((s) => s.chatId === chatId);
-    if (idx === -1) {
-      return res.status(404).json({ error: "Chat not found" });
+app.put(
+  "/chat/:userId/:chatId/title",
+  supabaseAuthRequired,
+  async (req, res) => {
+    const userId = req.auth?.sub;
+    const { chatId } = req.params;
+    const title = String(req.body?.title || "")
+      .trim()
+      .slice(0, 60);
+    if (!userId || !chatId) {
+      return res.status(400).json({ error: "Invalid userId or chatId" });
     }
-    sessions[idx].title = title;
-    sessions[idx].updatedAt = Date.now();
-    const [session] = sessions.splice(idx, 1);
-    sessions.unshift(session);
-    await saveSessions(userId, sessions);
-    return res.json({ success: true, chatId, title });
-  } catch (err) {
-    console.error("❌ Error updating chat title:", err);
-    return res.status(500).json({ error: "Failed to update title" });
-  }
-});
+    if (!title) {
+      return res.status(400).json({ error: "Invalid title" });
+    }
+    try {
+      const sessions = await listSessions(userId);
+      const idx = sessions.findIndex((s) => s.chatId === chatId);
+      if (idx === -1) {
+        return res.status(404).json({ error: "Chat not found" });
+      }
+      sessions[idx].title = title;
+      sessions[idx].updatedAt = Date.now();
+      const [session] = sessions.splice(idx, 1);
+      sessions.unshift(session);
+      await saveSessions(userId, sessions);
+      return res.json({ success: true, chatId, title });
+    } catch (err) {
+      console.error("❌ Error updating chat title:", err);
+      return res.status(500).json({ error: "Failed to update title" });
+    }
+  },
+);
 
 app.delete("/chats/:userId", supabaseAuthRequired, async (req, res) => {
   const userId = req.auth?.sub;
