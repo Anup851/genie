@@ -1878,14 +1878,14 @@ body.light-mode .history-list .error {
     position: absolute !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
-    bottom: 8px !important;
-    top: auto !important;
+    top: 6px !important;
+    bottom: auto !important;
     margin: 0 !important;
     width: auto !important;
     max-width: calc(100% - 132px) !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 0 !important;
     text-align: center !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -1919,6 +1919,68 @@ body.light-mode .history-list .error {
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
+  }
+}
+
+/* App-view should keep mobile-style header layout even above 480px */
+@media (min-width: 481px) {
+  body.app-view .chatbot header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 999 !important;
+    height: 72px !important;
+    padding-top: 18px !important;
+    padding-bottom: 8px !important;
+    display: block !important;
+  }
+
+  body.app-view .chatbot header #sidebar-toggle {
+    position: absolute !important;
+    left: 12px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
+
+  body.app-view .chatbot header h2 {
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    top: 6px !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    width: auto !important;
+    max-width: calc(100% - 132px) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  body.app-view .chatbot header .chat-title-logo {
+    width: 60px !important;
+    height: 60px !important;
+    background: transparent !important;
+  }
+
+  body.app-view .chatbot header #mode-toggle {
+    position: absolute !important;
+    right: 12px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
+
+  body.app-view .chatbot header #auth-btn {
+    position: absolute !important;
+    right: 58px !important;
+    bottom: 8px !important;
+    top: auto !important;
+  }
+
+  body.app-view .chatbot header #close-chatbot {
+    display: none !important;
   }
 }
 
@@ -1993,8 +2055,15 @@ body.light-mode .history-list .error {
   background: transparent !important;
 }
 
+body.light-mode .chat-title-logo{
+  mix-blend-mode: normal !important;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55))
+          drop-shadow(0 0 2px rgba(0, 0, 0, 0.35));
+}
+
 .chat-title-text{
   line-height: 1;
+  margin-left: -10px;
 }
 
 /* ================= APK BUTTON ================= */
@@ -2159,14 +2228,14 @@ body.app-view .chatbot header h2{
   position: absolute !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  bottom: 8px !important;
-  top: auto !important;
+  top: 6px !important;
+  bottom: auto !important;
   margin: 0 !important;
   width: auto !important;
   max-width: calc(100% - 132px) !important;
   display: inline-flex !important;
   align-items: center !important;
-  gap: 6px !important;
+  gap: 0 !important;
   text-align: center !important;
   white-space: nowrap !important;
   overflow: hidden !important;
@@ -2232,15 +2301,15 @@ body.app-view .auth-header-btn{
     left: 50% !important;
     transform: translateX(-50%) !important;
 
-    bottom: 8px !important;
-    top: auto !important;
+    top: 6px !important;
+    bottom: auto !important;
 
     margin: 0 !important;
     width: auto !important;
     max-width: calc(100% - 132px) !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 0 !important;
     text-align: center !important;
 
     white-space: nowrap !important;
