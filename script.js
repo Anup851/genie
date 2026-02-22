@@ -5,6 +5,7 @@ const chatbotToggler = document.querySelector(".chatbot-toggler");
 const closeBtn = document.querySelector(".close-btn");
 const chatInput = document.querySelector(".chat-input textarea");
 const sendChatBtn = document.querySelector("#send-btn");
+const stopChatBtn = document.querySelector("#stop-btn");
 const chatbox = document.querySelector(".chatbox");
 const historySidebar = document.querySelector(".history-sidebar");
 const historyList = document.querySelector(".history-list");
@@ -402,7 +403,11 @@ document.head.appendChild(style);
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
-const BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
+const DEFAULT_BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
+const IS_LOCAL_HOST = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || "");
+const BACKEND_URL = IS_LOCAL_HOST
+  ? "http://localhost:3000"
+  : (window.GENIE_BACKEND_URL || DEFAULT_BACKEND_URL);
 
 async function apiFetch(url, options = {}) {
   const session = await getSession();
@@ -432,6 +437,43 @@ let sttHasFinalInSession = false;
 let sttAutoSendTimer = null;
 const STT_AUTO_SEND_PAUSE_MS = 1200;
 let isRequestInFlight = false;
+let activeRequestController = null;
+let stopGenerationRequested = false;
+
+function requestStopGeneration() {
+  stopGenerationRequested = true;
+  if (activeRequestController) {
+    try {
+      activeRequestController.abort();
+    } catch {}
+  }
+}
+
+function throwIfGenerationStopped() {
+  if (stopGenerationRequested) {
+    const err = new Error("Generation stopped by user");
+    err.name = "AbortError";
+    throw err;
+  }
+}
+
+async function rollbackCancelledResponse(userMessage) {
+  try {
+    if (!activeChatId) return;
+    const trimmed = String(userMessage || "").trim();
+    if (!trimmed) return;
+    await apiFetch(`${BACKEND_URL}/chat/rollback-last`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chatId: activeChatId,
+        userMessage: trimmed,
+      }),
+    });
+  } catch (error) {
+    console.error("Failed to rollback cancelled response:", error);
+  }
+}
 
 function setComposerBusy(isBusy) {
   isRequestInFlight = !!isBusy;
@@ -439,11 +481,20 @@ function setComposerBusy(isBusy) {
     chatInput.readOnly = isRequestInFlight;
     chatInput.style.opacity = isRequestInFlight ? "0.85" : "";
   }
-  if (sendChatBtn) sendChatBtn.disabled = isRequestInFlight;
+  if (sendChatBtn) {
+    sendChatBtn.disabled = isRequestInFlight;
+    sendChatBtn.style.display = isRequestInFlight ? "none" : "inline-flex";
+  }
+  if (stopChatBtn) {
+    stopChatBtn.disabled = !isRequestInFlight;
+    stopChatBtn.style.display = isRequestInFlight ? "inline-flex" : "none";
+  }
   if (imageUploadInput) imageUploadInput.disabled = isRequestInFlight;
   if (imageUploadLabel) imageUploadLabel.setAttribute("aria-disabled", String(isRequestInFlight));
   if (micBtn && isRequestInFlight) micBtn.disabled = true;
   if (!isRequestInFlight) {
+    activeRequestController = null;
+    stopGenerationRequested = false;
     syncMicAuthState().catch(() => {});
   }
 }
@@ -573,6 +624,7 @@ function initEventListeners() {
 
     // Send message on button click
     if (sendChatBtn) sendChatBtn.addEventListener("click", handleChat);
+    if (stopChatBtn) stopChatBtn.addEventListener("click", requestStopGeneration);
     
     // Send message on Enter (without Shift)
     if (chatInput) {
@@ -1093,6 +1145,7 @@ function handleChat() {
     const userMessage = chatInput?.value.trim() || "";
     if (!chatInput) return;
     if (!userMessage && !pendingMediaSelected) return;
+    stopGenerationRequested = false;
     setComposerBusy(true);
 
     if (pendingMediaSelected && pendingMediaLoading) {
@@ -1177,6 +1230,7 @@ async function generateResponse(
   const messageElement = convertTypingToMessage(incomingChatli);
   messageElement.innerHTML = "Thinking<span class='dots'></span>";
   const hasMediaUpload = requestMode === "media";
+  let responseRenderingStarted = false;
 
   // Check for special commands
   if (await handleSpecialCommands(messageElement, userMessage)) {
@@ -1193,6 +1247,7 @@ async function generateResponse(
       return;
     }
     const controller = new AbortController();
+    activeRequestController = controller;
     const requestTimeoutMs = hasMediaUpload ? 300000 : 30000;
     timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     let responseText = "";
@@ -1261,10 +1316,13 @@ async function generateResponse(
     }
 
     responseText = normalizeInlineCodeArtifacts(responseText);
+    throwIfGenerationStopped();
+    responseRenderingStarted = true;
     messageElement.innerHTML = "";
     const textSpeed =
       responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
     await typeTextAndCode(messageElement, responseText, textSpeed, 5);
+    throwIfGenerationStopped();
     messageElement.innerHTML = parseFencedBlocks(responseText);
     if (window.Prism) Prism.highlightAllUnder(messageElement);
     enableCopyButtons(messageElement);
@@ -1284,9 +1342,25 @@ async function generateResponse(
   } catch (error) {
     console.error("Error generating response:", error);
     if (error?.name === "AbortError") {
-      messageElement.innerHTML = hasMediaUpload
-        ? "Media analysis is still running and took too long. Please retry in a moment."
-        : "Request timed out. Please try again.";
+      if (stopGenerationRequested) {
+        const currentText = String(messageElement.textContent || "").trim();
+        const hasThinking = !!messageElement.querySelector(".dots") || /^thinking/i.test(currentText);
+        const hasAnyRenderedContent = currentText.length > 0 && !hasThinking;
+
+        // If stopped before response started, keep message empty.
+        if (!responseRenderingStarted || !hasAnyRenderedContent) {
+          messageElement.innerHTML = "";
+        } else {
+          // If stopped mid-generation, keep partial content and expose actions.
+          enableCopyButtons(messageElement);
+          ensureMsgActions(messageElement.closest(".bot-message-container"));
+        }
+        await rollbackCancelledResponse(userMessage);
+      } else {
+        messageElement.innerHTML = hasMediaUpload
+          ? "Media analysis is still running and took too long. Please retry in a moment."
+          : "Request timed out. Please try again.";
+      }
     } else {
       messageElement.innerHTML = hasMediaUpload
         ? "Media analysis failed or service is busy. Please try again shortly."
@@ -2230,6 +2304,7 @@ function typeCharsInto(el, text, baseSpeed = 10, mode = "html") {
     let i = 0;
 
     function tick() {
+      if (stopGenerationRequested) return resolve();
       if (i >= safe.length) return resolve();
 
       const ch = safe[i++];
@@ -2271,6 +2346,7 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
     const raw = String(text || "");
     let buffer = "";
     for (let i = 0; i < raw.length; i++) {
+      throwIfGenerationStopped();
       const ch = raw[i];
       buffer += ch;
 
@@ -2294,6 +2370,7 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
   async function typeCode(target, code) {
     target.textContent = "";
     for (let i = 0; i < code.length; i++) {
+      throwIfGenerationStopped();
       target.textContent += code[i];
 
       const chatbox = document.querySelector(".chatbox");
@@ -2305,6 +2382,7 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
   }
 
   while ((match = regex.exec(fullText)) !== null) {
+    throwIfGenerationStopped();
     const before = fullText.slice(lastIndex, match.index);
     const lang = normalizeCodeLanguage(match[1] || "text");
     const code = match[2] || "";

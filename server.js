@@ -378,6 +378,63 @@ function buildSarvamInstructionBlock(nowIST) {
   ].join(" ");
 }
 
+function isSarvamTurnOrderError(errorText = "") {
+  const text = String(errorText || "").toLowerCase();
+  return (
+    text.includes("first message must be from user") ||
+    (text.includes("starting with a user message") &&
+      text.includes("must alternate"))
+  );
+}
+
+// Normalize turns for strict providers that require: user, assistant, user...
+function normalizeSarvamMessages(messages = [], opts = {}) {
+  const includeSystem = opts.includeSystem !== false;
+  const systemText = String(opts.systemText || "");
+  const result = [];
+
+  if (includeSystem && systemText) {
+    result.push({ role: "system", content: systemText });
+  }
+
+  const turns = [];
+  for (const m of messages) {
+    if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
+    const content = String(m.content || "").trim();
+    if (!content) continue;
+
+    if (!turns.length) {
+      if (m.role !== "user") continue; // drop leading assistant turns
+      turns.push({ role: "user", content });
+      continue;
+    }
+
+    const prev = turns[turns.length - 1];
+    if (prev.role === m.role) {
+      // keep context without breaking strict alternation
+      prev.content = `${prev.content}\n\n${content}`;
+    } else {
+      turns.push({ role: m.role, content });
+    }
+  }
+
+  // Ensure at least one user message exists.
+  if (!turns.length) {
+    turns.push({ role: "user", content: "Hello" });
+  }
+
+  // If last turn is assistant, add a tiny user nudge so model can respond.
+  if (turns[turns.length - 1].role !== "user") {
+    turns.push({ role: "user", content: "Please continue." });
+  }
+
+  if (!includeSystem && systemText && turns[0]?.role === "user") {
+    turns[0].content = `[INSTRUCTION]\n${systemText}\n\n${turns[0].content}`;
+  }
+
+  return result.concat(turns);
+}
+
 function isTextLikeMime(mimeType) {
   const mime = String(mimeType || "").toLowerCase();
   return (
@@ -1031,6 +1088,44 @@ app.post("/chat/manual", supabaseAuthRequired, async (req, res) => {
     return res.status(500).json({ error: "Failed to save manual chat" });
   }
 });
+
+// Roll back last assistant reply for a just-cancelled request.
+app.post("/chat/rollback-last", supabaseAuthRequired, async (req, res) => {
+  const userId = req.auth?.sub;
+  const { chatId, userMessage } = req.body || {};
+  const activeChatId = chatId || "default";
+  const expectedUser = String(userMessage || "").trim();
+  if (!userId || !activeChatId || !expectedUser) {
+    return res.status(400).json({ error: "Invalid request" });
+  }
+
+  try {
+    const key =
+      activeChatId === "default"
+        ? `chat_${userId}`
+        : sessionMessagesKey(userId, activeChatId);
+    const raw = await db.get(key);
+    const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
+    if (history.length < 2) return res.json({ ok: true, removed: false });
+
+    const last = history[history.length - 1];
+    const prev = history[history.length - 2];
+    if (
+      last?.role === "assistant" &&
+      prev?.role === "user" &&
+      String(prev?.message || "").trim() === expectedUser
+    ) {
+      history.pop(); // remove only assistant reply, keep user prompt
+      await db.set(key, history);
+      return res.json({ ok: true, removed: true });
+    }
+
+    return res.json({ ok: true, removed: false });
+  } catch (err) {
+    console.error("❌ /chat/rollback-last error:", err);
+    return res.status(500).json({ error: "Failed to rollback message" });
+  }
+});
 // ============================================================
 // MAIN CHAT ENDPOINT - WITH SESSION LIMIT WARNING
 // ============================================================
@@ -1039,6 +1134,10 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
   const userId = req.auth?.sub;
   const { message, chatId } = req.body || {};
   const activeChatId = chatId || "default";
+  let clientDisconnected = false;
+  req.on("close", () => {
+    clientDisconnected = true;
+  });
 
   if (!userId || !message || message.trim().length === 0) {
     return res.status(400).json({ error: "Invalid request" });
@@ -1185,6 +1284,11 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
 
     // âœ… CALL SARVAM AI
     const controller = new AbortController();
+    req.on("close", () => {
+      try {
+        controller.abort();
+      } catch {}
+    });
     const timeout = setTimeout(
       () => controller.abort(),
       optimizedParams.timeout,
@@ -1200,12 +1304,19 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
       max_tokens: optimizedParams.maxTokens,
       temperature: optimizedParams.temperature,
     };
+    const systemPromptText = messagesForAI[0]?.role === "system"
+      ? String(messagesForAI[0].content || "")
+      : "";
+    const strictMessages = normalizeSarvamMessages(messagesForAI, {
+      includeSystem: true,
+      systemText: systemPromptText,
+    });
     let response = await fetch(sarvamUrl, {
       method: "POST",
       headers: sarvamHeaders,
       body: JSON.stringify({
         ...basePayload,
-        messages: messagesForAI,
+        messages: strictMessages,
       }),
       signal: controller.signal,
     });
@@ -1220,25 +1331,12 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         errorText.substring(0, 200),
       );
 
-      if (
-        response.status === 400 &&
-        errorText.includes("First message must be from user")
-      ) {
-        // Retry once with system instructions moved into first user message.
-        const fallbackMessages = [];
-        const historyOnly = messagesForAI.filter((m) => m.role !== "system");
-        const baseUserContent =
-          historyOnly.length && historyOnly[0].role === "user"
-            ? historyOnly[0].content
-            : userContent;
-        fallbackMessages.push({
-          role: "user",
-          content: `[INSTRUCTION]\n${instructionBlock}\n\n${baseUserContent}`,
+      if (response.status === 400 && isSarvamTurnOrderError(errorText)) {
+        // Retry once with user-first strict formatting and inline instruction.
+        const fallbackMessages = normalizeSarvamMessages(messagesForAI, {
+          includeSystem: false,
+          systemText: systemPromptText || instructionBlock,
         });
-        for (const m of historyOnly) {
-          if (m === historyOnly[0]) continue;
-          fallbackMessages.push(m);
-        }
 
         response = await fetch(sarvamUrl, {
           method: "POST",
@@ -1272,6 +1370,11 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         data.choices?.[0]?.message?.content || "No response.",
       ),
     );
+
+    // If client stopped/disconnected, do not persist or send cancelled response.
+    if (clientDisconnected || req.aborted) {
+      return;
+    }
 
     // âœ… SAVE MESSAGES
     await saveMessage(userId, "user", sanitizedMessage, activeChatId);
