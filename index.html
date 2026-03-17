@@ -73,7 +73,16 @@
     <script src="script.js" defer></script>
   </head>
 
-  <body class="in-app">
+  <body class="in-app ui-loading">
+    <div class="app-shell-loader" id="app-shell-loader" aria-hidden="true">
+      <div class="app-shell-loader__panel">
+        <img class="app-shell-loader__logo" src="genie-logo.png" alt="Genie logo" />
+        <div class="app-shell-loader__copy">
+          <strong>Genie is getting ready</strong>
+          <span>Loading chat, memory, and your workspace...</span>
+        </div>
+      </div>
+    </div>
     <!-- <div class="welcome">
       <h1 class="welcomes">
         <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>

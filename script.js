@@ -53,6 +53,12 @@ const DOCUMENT_CHUNK_OVERLAP = 180;
 let userMemories = [];
 let activeDocumentContext = null;
 
+function revealAppShell() {
+  document.body.classList.remove("ui-loading");
+  const loader = document.getElementById("app-shell-loader");
+  if (loader) loader.setAttribute("hidden", "hidden");
+}
+
 const SUPPORTED_MEDIA_MIME_TYPES = new Set([
   "application/pdf",
   "text/plain",
@@ -972,22 +978,28 @@ function setComposerBusy(isBusy) {
 // âœ… SINGLE DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("ðŸš€ Initializing app...");
-  
-  // Update auth button first
-  await updateAuthButton();
-  if (supabaseClient?.auth?.onAuthStateChange) {
-    supabaseClient.auth.onAuthStateChange(async () => {
-      await updateAuthButton();
-      await syncMicAuthState();
+
+  try {
+    // Update auth button first
+    await updateAuthButton();
+    if (supabaseClient?.auth?.onAuthStateChange) {
+      supabaseClient.auth.onAuthStateChange(async () => {
+        await updateAuthButton();
+        await syncMicAuthState();
+      });
+    }
+
+    // Then initialize the rest
+    await initializeApp();
+    markAppView();
+    setupDownloadAppButton();
+    fixSidebarCloseButton();
+    setupWebViewCloseButton();
+  } finally {
+    requestAnimationFrame(() => {
+      revealAppShell();
     });
   }
-  
-  // Then initialize the rest
-  await initializeApp();
-  markAppView();
-  setupDownloadAppButton();
-  fixSidebarCloseButton();
-  setupWebViewCloseButton();
 });
 
 // ================= WEBVIEW DETECTION =================

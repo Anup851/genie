@@ -89,6 +89,114 @@ html, body {
   overflow-x: hidden;
 }
 
+body.ui-loading {
+  overflow: hidden !important;
+}
+
+body.ui-loading .history-sidebar,
+body.ui-loading .container,
+body.ui-loading .chatbot,
+body.ui-loading #sidebar-toggle {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.app-shell-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(99, 102, 241, 0.22), transparent 34%),
+    linear-gradient(180deg, #090b11 0%, #111219 100%);
+}
+
+body.ui-loading .app-shell-loader {
+  display: flex;
+}
+
+.app-shell-loader__panel {
+  width: min(100%, 420px);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(17, 18, 25, 0.82);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(14px);
+}
+
+.app-shell-loader__logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.app-shell-loader__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.app-shell-loader__copy strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-shell-loader__copy span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+body.light-mode .app-shell-loader {
+  background:
+    radial-gradient(circle at top, rgba(99, 102, 241, 0.12), transparent 34%),
+    linear-gradient(180deg, #f7f8fc 0%, #eef1f7 100%);
+}
+
+body.light-mode .app-shell-loader__panel {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+@media (max-width: 640px) {
+  .app-shell-loader {
+    padding: 16px;
+  }
+
+  .app-shell-loader__panel {
+    width: 100%;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .app-shell-loader__logo {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .app-shell-loader__copy strong {
+    font-size: 15px;
+  }
+
+  .app-shell-loader__copy span {
+    font-size: 12px;
+  }
+}
+
 .container {
   height: 100vh;
   width: 100vw;
