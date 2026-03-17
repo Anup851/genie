@@ -25,6 +25,20 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css"
     />
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
+    <script>
+      window.pdfjsLibReady = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs")
+        .then((pdfjsLib) => {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs";
+          window.pdfjsLib = pdfjsLib;
+          return pdfjsLib;
+        })
+        .catch((error) => {
+          console.error("Failed to load pdf.js", error);
+          return null;
+        });
+    </script>
 
     <!-- ✅ Material Symbols (for header icons like menu/dark_mode/close/download/person) -->
     <link
@@ -102,9 +116,12 @@
       </ul>
 
       <div class="sidebar-footer">
-        <button id="auth-btn" type="button">
-          <span class="material-symbols-outlined">person</span>
-          <span class="auth-text">Login</span>
+        <button id="sidebar-settings-btn" class="sidebar-settings-btn" type="button">
+          <span class="material-symbols-outlined">settings</span>
+          <span class="sidebar-settings-copy">
+            <strong>Settings</strong>
+            <small id="sidebar-memory-summary">Memory ready</small>
+          </span>
         </button>
       </div>
     </div>
@@ -147,10 +164,6 @@
               <span class="apk-text">APK</span>
             </a>
 
-            <button id="mode-toggle" type="button">
-              <span class="material-symbols-outlined">dark_mode</span>
-            </button>
-
             <button
               id="close-chatbot"
               class="material-symbols-outlined close-btn"
@@ -172,6 +185,19 @@
           </li>
         </ul>
 
+        <div id="document-context-banner" class="document-context-banner" hidden>
+          <div class="document-context-main">
+            <span class="material-symbols-outlined">description</span>
+            <div class="document-context-copy">
+              <strong id="document-context-title">Document ready</strong>
+              <span id="document-context-subtitle">Answer may use uploaded document.</span>
+            </div>
+          </div>
+          <button id="clear-document-btn" class="document-context-clear" type="button">
+            Clear
+          </button>
+        </div>
+
         <div class="chat-input">
           <div id="selected-media-preview" class="selected-media-preview" style="display: none"></div>
           <label
@@ -183,13 +209,6 @@
           </label>
           <input type="file" id="image-upload" accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.xml,.html,.css,.js,.ts,.py,.java,.c,.cpp" style="display: none" />
           <textarea placeholder="Ask anything with GENIE..." spellcheck="false" required></textarea>
-          <span
-            id="speech-status"
-            class="speech-status material-symbols-outlined"
-            aria-live="polite"
-            aria-label="Mic ready"
-            title="Mic ready"
-          >mic</span>
           <button
             id="mic-btn"
             class="material-symbols-outlined"
@@ -197,6 +216,14 @@
             type="button"
           >
             mic
+          </button>
+          <button
+            id="image-mode-btn"
+            class="material-symbols-outlined"
+            title="Image mode"
+            type="button"
+          >
+            image
           </button>
           <button id="send-btn" class="material-symbols-outlined" type="button">
             send
@@ -213,6 +240,54 @@
         </div>
         <div class="chat-footer-note">
           Genie can make mistakes. Check important info.
+        </div>
+      </div>
+    </div>
+
+    <div id="memory-modal" class="memory-modal" hidden>
+      <div class="memory-modal-backdrop" data-close-memory="true"></div>
+      <div class="memory-modal-card" role="dialog" aria-modal="true" aria-labelledby="memory-modal-title">
+        <div class="memory-modal-header">
+          <div>
+            <h3 id="memory-modal-title">Genie Settings</h3>
+            <p>Manage memory and quick app preferences in one place.</p>
+          </div>
+          <button id="close-memory-btn" class="material-symbols-outlined memory-close-btn" type="button">
+            close
+          </button>
+        </div>
+        <div class="settings-overview-grid">
+          <div class="settings-stat-card">
+            <span class="material-symbols-outlined">neurology</span>
+            <div>
+              <strong id="settings-memory-count">0 saved items</strong>
+              <p>Genie uses memory to personalize replies.</p>
+            </div>
+          </div>
+          <button id="settings-theme-btn" class="settings-theme-btn" type="button">
+            <span class="material-symbols-outlined">dark_mode</span>
+            <span class="settings-theme-copy">
+              <strong>Appearance</strong>
+              <small id="settings-theme-label">Dark mode</small>
+            </span>
+          </button>
+          <button id="auth-btn" class="settings-auth-btn" type="button">
+            <span class="material-symbols-outlined">person</span>
+            <span class="auth-copy">
+              <strong class="auth-text">Account Login</strong>
+              <small class="auth-subtext">Sign in or manage account</small>
+            </span>
+          </button>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-head">
+            <h4>Saved Memory</h4>
+            <span class="settings-section-note">Simple facts Genie remembers for future chats.</span>
+          </div>
+          <div id="memory-list" class="memory-list"></div>
+        </div>
+        <div class="memory-modal-actions">
+          <button id="clear-memory-btn" class="memory-clear-btn" type="button">Clear all</button>
         </div>
       </div>
     </div>

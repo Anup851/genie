@@ -16,14 +16,26 @@ const sidebarToggle = document.getElementById("sidebar-toggle");
 const closeSidebarBtn = document.getElementById("close-sidebar");
 const newChatBtn = document.getElementById("new-chat-btn");
 const startChatBtn = document.querySelector(".start-chat-btn");
-const modeToggle = document.getElementById("mode-toggle");
-const modeIcon = modeToggle?.querySelector(".material-symbols-outlined");
 const micBtn = document.getElementById("mic-btn");
+const imageModeBtn = document.getElementById("image-mode-btn");
 const speechStatus = document.getElementById("speech-status");
 const authBtn = document.getElementById("auth-btn");
+const sidebarSettingsBtn = document.getElementById("sidebar-settings-btn");
+const sidebarMemorySummary = document.getElementById("sidebar-memory-summary");
 const imageUploadInput = document.getElementById("image-upload");
 const imageUploadLabel = document.querySelector('label[for="image-upload"]');
 const selectedMediaPreview = document.getElementById("selected-media-preview");
+const memoryModal = document.getElementById("memory-modal");
+const memoryList = document.getElementById("memory-list");
+const closeMemoryBtn = document.getElementById("close-memory-btn");
+const clearMemoryBtn = document.getElementById("clear-memory-btn");
+const settingsMemoryCount = document.getElementById("settings-memory-count");
+const settingsThemeBtn = document.getElementById("settings-theme-btn");
+const settingsThemeLabel = document.getElementById("settings-theme-label");
+const documentContextBanner = document.getElementById("document-context-banner");
+const documentContextTitle = document.getElementById("document-context-title");
+const documentContextSubtitle = document.getElementById("document-context-subtitle");
+const clearDocumentBtn = document.getElementById("clear-document-btn");
 
 let pendingImageData = null;
 let pendingImageName = "";
@@ -31,6 +43,15 @@ let pendingMediaType = "";
 let pendingMediaPreviewHref = null;
 let pendingMediaSelected = false;
 let pendingMediaLoading = false;
+let imageModeEnabled = false;
+let pendingDocumentContext = null;
+const MEMORY_STORAGE_KEY = "genie_user_memories_v1";
+const DOCUMENT_STORAGE_KEY = "genie_active_document_v1";
+const DOCUMENT_MAX_CHUNKS = 5;
+const DOCUMENT_CHUNK_SIZE = 1200;
+const DOCUMENT_CHUNK_OVERLAP = 180;
+let userMemories = [];
+let activeDocumentContext = null;
 
 const SUPPORTED_MEDIA_MIME_TYPES = new Set([
   "application/pdf",
@@ -94,6 +115,43 @@ function getMediaKindLabel(mimeType = "", dataUrl = "") {
   return "file";
 }
 
+function extractFirstHttpUrl(text) {
+  const match = String(text || "").match(/https?:\/\/[^\s)]+/i);
+  return match ? sanitizeMarkdownUrl(match[0]) : "";
+}
+
+function isGeneratedImageReplyText(text) {
+  const t = String(text || "");
+  return /^Generated image for:/i.test(t) && !!extractFirstHttpUrl(t);
+}
+
+function createGeneratedImageReplyHtml({ imageUrl = "", prompt = "" }) {
+  const safeUrl = escapeHtml(sanitizeMarkdownUrl(imageUrl));
+  const safePrompt = escapeHtml(String(prompt || "").trim() || "Image prompt");
+  return `
+    <div class="generated-image-card">
+      <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="generated-image-link">
+        <img src="${safeUrl}" alt="${safePrompt}" class="generated-image-preview" />
+      </a>
+      <p class="generated-image-caption">${safePrompt}</p>
+      <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="generated-image-open">Open image</a>
+    </div>
+  `;
+}
+
+function setImageMode(enabled) {
+  imageModeEnabled = !!enabled;
+  if (!imageModeBtn) return;
+  imageModeBtn.classList.toggle("active", imageModeEnabled);
+  imageModeBtn.setAttribute("aria-pressed", String(imageModeEnabled));
+  imageModeBtn.title = imageModeEnabled ? "Image mode on" : "Image mode";
+  if (chatInput && !pendingMediaSelected) {
+    chatInput.placeholder = imageModeEnabled
+      ? "Describe the image you want to generate..."
+      : "Ask anything with GENIE...";
+  }
+}
+
 function clearSelectedMediaPreview() {
   if (!selectedMediaPreview) return;
   selectedMediaPreview.innerHTML = "";
@@ -140,11 +198,416 @@ function renderSelectedMediaPreview({ mediaData, mediaName, mediaType, previewHr
     pendingMediaType = "";
     pendingMediaSelected = false;
     pendingMediaLoading = false;
+    pendingDocumentContext = null;
     if (imageUploadInput) imageUploadInput.value = "";
     revokePendingMediaPreviewHref();
     if (chatInput) chatInput.placeholder = "Ask anything with GENIE...";
     clearSelectedMediaPreview();
   });
+}
+
+function loadMemories() {
+  try {
+    const raw = localStorage.getItem(MEMORY_STORAGE_KEY);
+    const parsed = JSON.parse(raw || "[]");
+    userMemories = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    userMemories = [];
+  }
+  renderMemoryList();
+}
+
+function persistMemories() {
+  localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(userMemories));
+  renderMemoryList();
+}
+
+function getMemories() {
+  return Array.isArray(userMemories) ? userMemories : [];
+}
+
+function saveMemory(memory) {
+  if (!memory?.key || !memory?.value) return;
+  const key = String(memory.key).trim().toLowerCase();
+  const value = String(memory.value).trim();
+  if (!key || !value) return;
+
+  const next = {
+    id: memory.id || `${key}:${value}`.toLowerCase(),
+    key,
+    label: String(memory.label || key),
+    value,
+  };
+  const existingIndex = userMemories.findIndex((item) => item.key === key);
+  if (existingIndex >= 0) userMemories[existingIndex] = next;
+  else userMemories.push(next);
+  persistMemories();
+}
+
+function deleteMemory(memoryId) {
+  userMemories = userMemories.filter((item) => item.id !== memoryId);
+  persistMemories();
+}
+
+function clearMemories() {
+  userMemories = [];
+  persistMemories();
+}
+
+function renderMemoryList() {
+  if (!memoryList) return;
+  const memories = getMemories();
+  updateMemorySettingsSummary(memories);
+  if (!memories.length) {
+    memoryList.innerHTML = `<div class="memory-empty">No saved memory yet. Genie will save simple facts like your name, goal, or preferences.</div>`;
+    return;
+  }
+
+  memoryList.innerHTML = memories
+    .map(
+      (item) => `
+        <div class="memory-item">
+          <div>
+            <strong>${escapeHtml(item.label)}</strong>
+            <p>${escapeHtml(item.value)}</p>
+          </div>
+          <button class="memory-delete-btn material-symbols-outlined" type="button" data-memory-id="${escapeHtml(item.id)}" title="Delete memory">delete</button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function updateMemorySettingsSummary(memories = getMemories()) {
+  const count = Array.isArray(memories) ? memories.length : 0;
+  if (settingsMemoryCount) {
+    settingsMemoryCount.textContent =
+      count === 1 ? "1 saved item" : `${count} saved items`;
+  }
+  if (sidebarMemorySummary) {
+    sidebarMemorySummary.textContent =
+      count > 0 ? `${count} memory item${count === 1 ? "" : "s"} saved` : "No memory saved yet";
+  }
+  if (settingsThemeLabel) {
+    settingsThemeLabel.textContent = document.body.classList.contains("light-mode")
+      ? "Light mode"
+      : "Dark mode";
+  }
+  const settingsThemeIcon = settingsThemeBtn?.querySelector(".material-symbols-outlined");
+  if (settingsThemeIcon) {
+    settingsThemeIcon.textContent = document.body.classList.contains("light-mode")
+      ? "light_mode"
+      : "dark_mode";
+  }
+  if (settingsThemeBtn) {
+    settingsThemeBtn.setAttribute(
+      "aria-label",
+      document.body.classList.contains("light-mode")
+        ? "Switch to dark mode"
+        : "Switch to light mode",
+    );
+  }
+}
+
+function openMemoryModal() {
+  if (!memoryModal) return;
+  renderMemoryList();
+  memoryModal.hidden = false;
+  document.body.classList.add("settings-open");
+}
+
+function closeMemoryModal() {
+  if (!memoryModal) return;
+  memoryModal.hidden = true;
+  document.body.classList.remove("settings-open");
+}
+
+function toggleThemePreference() {
+  document.body.classList.toggle("light-mode");
+  localStorage.setItem(
+    "theme",
+    document.body.classList.contains("light-mode") ? "light" : "dark",
+  );
+  updateMemorySettingsSummary();
+}
+
+function normalizeTextForSearch(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractUserMemories(message) {
+  const text = String(message || "").trim();
+  if (!text) return [];
+  const extracted = [];
+  const patterns = [
+    {
+      key: "name",
+      label: "Name",
+      regex: /\bmy name is\s+([a-z][a-z\s'-]{1,40})/i,
+    },
+    {
+      key: "learning_goal",
+      label: "Learning",
+      regex: /\bi am learning\s+([a-z0-9][a-z0-9\s+#.+-]{1,60})/i,
+    },
+    {
+      key: "job_goal",
+      label: "Job goal",
+      regex: /\bi want a job in\s+([a-z0-9][a-z0-9\s&/+.-]{1,60})/i,
+    },
+    {
+      key: "preference",
+      label: "Preference",
+      regex: /\bi prefer\s+([a-z0-9][a-z0-9\s,&/+.-]{1,80})/i,
+    },
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern.regex);
+    const value = match?.[1]?.replace(/\s+/g, " ").trim();
+    if (!value) continue;
+    extracted.push({
+      id: `${pattern.key}:${value}`.toLowerCase(),
+      key: pattern.key,
+      label: pattern.label,
+      value,
+    });
+  }
+
+  return extracted;
+}
+
+function saveExtractedMemories(message) {
+  const extracted = extractUserMemories(message);
+  extracted.forEach(saveMemory);
+}
+
+function chunkText(text, chunkSize = DOCUMENT_CHUNK_SIZE, overlap = DOCUMENT_CHUNK_OVERLAP) {
+  const source = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!source) return [];
+  const chunks = [];
+  let index = 0;
+  while (index < source.length) {
+    const end = Math.min(source.length, index + chunkSize);
+    const chunk = source.slice(index, end).trim();
+    if (chunk) chunks.push(chunk);
+    if (end >= source.length) break;
+    index = Math.max(end - overlap, index + 1);
+  }
+  return chunks;
+}
+
+function scoreChunk(query, chunk) {
+  const queryWords = Array.from(new Set(normalizeTextForSearch(query).split(" ").filter((word) => word.length > 2)));
+  const chunkWords = new Set(normalizeTextForSearch(chunk).split(" ").filter(Boolean));
+  if (!queryWords.length || !chunkWords.size) return 0;
+
+  let score = 0;
+  for (const word of queryWords) {
+    if (chunkWords.has(word)) score += 1;
+  }
+
+  const normalizedChunk = normalizeTextForSearch(chunk);
+  const normalizedQuery = normalizeTextForSearch(query);
+  if (normalizedQuery && normalizedChunk.includes(normalizedQuery)) score += 4;
+  return score;
+}
+
+function getRelevantChunks(question, chunks, maxChunks = DOCUMENT_MAX_CHUNKS) {
+  return (Array.isArray(chunks) ? chunks : [])
+    .map((chunk, index) => ({ chunk, index, score: scoreChunk(question, chunk) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, maxChunks)
+    .map((entry) => entry.chunk);
+}
+
+function formatRecentConversation(limit = 6) {
+  const recent = conversationMemory.slice(-limit);
+  if (!recent.length) return "No recent chat.";
+  return recent
+    .map((item) => `${item.role === "assistant" ? "Assistant" : "User"}: ${String(item.text || "").trim()}`)
+    .join("\n");
+}
+
+function formatUserMemories() {
+  const memories = getMemories();
+  if (!memories.length) return "No saved memory.";
+  return memories.map((item) => `- ${item.label}: ${item.value}`).join("\n");
+}
+
+function buildPrompt({ question, recentMessages, documentContext, memoryText }) {
+  const safeQuestion = String(question || "").trim();
+  return [
+    "SYSTEM:",
+    "You are Genie AI, a helpful assistant that explains clearly, simply, and accurately.",
+    "",
+    "USER MEMORY:",
+    memoryText || "No saved memory.",
+    "",
+    "DOCUMENT CONTEXT:",
+    documentContext || "No active document context.",
+    "",
+    "RECENT CHAT:",
+    recentMessages || "No recent chat.",
+    "",
+    "USER QUESTION:",
+    safeQuestion,
+    "",
+    "INSTRUCTIONS:",
+    "- Answer clearly and directly",
+    "- Use document context when relevant",
+    "- Use saved memory only when useful",
+    "- If context is insufficient, say so honestly",
+  ].join("\n");
+}
+
+function saveActiveDocument(doc) {
+  activeDocumentContext = doc;
+  try {
+    if (doc) sessionStorage.setItem(DOCUMENT_STORAGE_KEY, JSON.stringify(doc));
+    else sessionStorage.removeItem(DOCUMENT_STORAGE_KEY);
+  } catch {}
+  updateDocumentContextUI();
+}
+
+function loadActiveDocument() {
+  try {
+    const raw = sessionStorage.getItem(DOCUMENT_STORAGE_KEY);
+    activeDocumentContext = raw ? JSON.parse(raw) : null;
+  } catch {
+    activeDocumentContext = null;
+  }
+  updateDocumentContextUI();
+}
+
+function clearActiveDocument() {
+  saveActiveDocument(null);
+}
+
+function updateDocumentContextUI() {
+  if (!documentContextBanner || !documentContextTitle || !documentContextSubtitle) return;
+  if (!activeDocumentContext?.name) {
+    documentContextBanner.hidden = true;
+    return;
+  }
+
+  const chunkCount = Array.isArray(activeDocumentContext.chunks)
+    ? activeDocumentContext.chunks.length
+    : 0;
+  documentContextTitle.textContent = `${activeDocumentContext.name} ready`;
+  documentContextSubtitle.textContent =
+    chunkCount > 0
+      ? `Answer may use uploaded document. ${chunkCount} chunks indexed in browser.`
+      : "Answer may use uploaded document.";
+  documentContextBanner.hidden = false;
+}
+
+async function extractPdfText(file) {
+  const pdfjsLib = (await window.pdfjsLibReady) || window.pdfjsLib;
+  if (!pdfjsLib) {
+    throw new Error("PDF parsing is unavailable right now.");
+  }
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pageTexts = [];
+
+  for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+    const page = await pdf.getPage(pageIndex);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item) => item.str || "")
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (pageText) pageTexts.push(pageText);
+  }
+
+  return pageTexts.join("\n\n");
+}
+
+async function extractDocumentText(file) {
+  if (!file) return "";
+  const name = String(file.name || "").toLowerCase();
+  const mime = String(file.type || "").toLowerCase();
+
+  if (mime === "application/pdf" || name.endsWith(".pdf")) {
+    return extractPdfText(file);
+  }
+
+  if (
+    mime.startsWith("text/") ||
+    mime.includes("json") ||
+    mime.includes("csv") ||
+    mime.includes("xml") ||
+    mime.includes("javascript") ||
+    [".txt", ".md", ".json", ".csv", ".xml", ".html", ".css", ".js", ".ts", ".py", ".java", ".c", ".cpp"].some((ext) => name.endsWith(ext))
+  ) {
+    return file.text();
+  }
+
+  return "";
+}
+
+async function handleDocumentUpload(file) {
+  const extractedText = await extractDocumentText(file);
+  const normalizedText = String(extractedText || "").replace(/\s+/g, " ").trim();
+  if (!normalizedText) {
+    clearActiveDocument();
+    return false;
+  }
+
+  saveActiveDocument({
+    name: file.name || "document",
+    type: file.type || "",
+    text: normalizedText.slice(0, 120000),
+    chunks: chunkText(normalizedText),
+    savedAt: Date.now(),
+  });
+  return true;
+}
+
+function buildDocumentContext(question) {
+  if (!activeDocumentContext?.chunks?.length) return "";
+  const matches = getRelevantChunks(question, activeDocumentContext.chunks);
+  const chunksToUse = matches.length ? matches : activeDocumentContext.chunks.slice(0, 2);
+  return chunksToUse
+    .map((chunk, index) => `[Chunk ${index + 1}]\n${chunk}`)
+    .join("\n\n");
+}
+
+function getStructuredPromptForQuestion(question) {
+  const memoryText = formatUserMemories();
+  const documentContext = buildDocumentContext(question);
+  const recentMessages = formatRecentConversation();
+  const shouldWrap =
+    memoryText !== "No saved memory." ||
+    !!documentContext ||
+    conversationMemory.length > 0;
+
+  if (!shouldWrap) {
+    return {
+      message: question,
+      usedMemory: false,
+      usedDocument: false,
+    };
+  }
+
+  return {
+    message: buildPrompt({
+      question,
+      recentMessages,
+      documentContext,
+      memoryText,
+    }),
+    usedMemory: memoryText !== "No saved memory.",
+    usedDocument: !!documentContext,
+  };
 }
 
 
@@ -220,10 +683,12 @@ async function updateAuthButton() {
 
     newBtn.innerHTML = `
       <span class="material-symbols-outlined">account_circle</span>
-      <span class="auth-text">${displayName}</span>
+      <span class="auth-copy">
+        <strong class="auth-text">Account</strong>
+        <small class="auth-subtext">${displayName} • ${userEmail}</small>
+      </span>
     `;
 
-    // âœ… CHANGE: go to auth page instead of logout confirm
     newBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -233,7 +698,10 @@ async function updateAuthButton() {
   } else {
     newBtn.innerHTML = `
       <span class="material-symbols-outlined">person</span>
-      <span class="auth-text">Login</span>
+      <span class="auth-copy">
+        <strong class="auth-text">Account Login</strong>
+        <small class="auth-subtext">Tap to sign in or manage your account</small>
+      </span>
     `;
 
     newBtn.addEventListener("click", (e) => {
@@ -491,6 +959,7 @@ function setComposerBusy(isBusy) {
   }
   if (imageUploadInput) imageUploadInput.disabled = isRequestInFlight;
   if (imageUploadLabel) imageUploadLabel.setAttribute("aria-disabled", String(isRequestInFlight));
+  if (imageModeBtn) imageModeBtn.disabled = isRequestInFlight;
   if (micBtn && isRequestInFlight) micBtn.disabled = true;
   if (!isRequestInFlight) {
     activeRequestController = null;
@@ -538,6 +1007,8 @@ async function initializeApp() {
 
   // 1) Start directly on main chat page
   initUIState();
+  loadMemories();
+  loadActiveDocument();
 
   // 2) User - âœ… FIXED with await
   const userId = await getUserId();
@@ -555,6 +1026,7 @@ async function initializeApp() {
 
   // 4) Events
   initEventListeners();
+  setImageMode(false);
 
   // 5) Backend check
   testBackendConnection().catch(console.error);
@@ -590,30 +1062,53 @@ function initUIState() {
 }
 // 3. THEME MANAGEMENT
 function initTheme() {
-    if (!modeToggle || !modeIcon) return;
-    
-    // Set initial icon
-    modeIcon.textContent = document.body.classList.contains("light-mode") 
-        ? "light_mode" 
-        : "dark_mode";
-    
-    modeToggle.addEventListener("click", () => {
-        document.body.classList.toggle("light-mode");
-        modeIcon.textContent = document.body.classList.contains("light-mode") 
-            ? "light_mode" 
-            : "dark_mode";
-        localStorage.setItem("theme", document.body.classList.contains("light-mode") ? "light" : "dark");
-    });
-    
     // Load saved theme
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "light") {
         document.body.classList.add("light-mode");
-        modeIcon.textContent = "light_mode";
     }
+    updateMemorySettingsSummary();
 }
 // 4. EVENT LISTENERS
 function initEventListeners() {
+    if (sidebarSettingsBtn) {
+        sidebarSettingsBtn.addEventListener("click", () => openMemoryModal());
+    }
+    if (closeMemoryBtn) {
+        closeMemoryBtn.addEventListener("click", () => closeMemoryModal());
+    }
+    if (clearMemoryBtn) {
+        clearMemoryBtn.addEventListener("click", () => {
+            clearMemories();
+            renderMemoryList();
+        });
+    }
+    if (memoryList) {
+        memoryList.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-memory-id]");
+            if (!btn) return;
+            deleteMemory(btn.getAttribute("data-memory-id"));
+        });
+    }
+    if (settingsThemeBtn) {
+        settingsThemeBtn.addEventListener("click", () => {
+            toggleThemePreference();
+        });
+    }
+    if (memoryModal) {
+        memoryModal.addEventListener("click", (e) => {
+            if (e.target instanceof HTMLElement && e.target.dataset.closeMemory === "true") {
+                closeMemoryModal();
+            }
+        });
+    }
+    if (clearDocumentBtn) {
+        clearDocumentBtn.addEventListener("click", () => {
+            clearActiveDocument();
+            pendingDocumentContext = null;
+        });
+    }
+
     // ðŸ”´ COMMENT OUT THIS OLD AUTH HANDLER - It's conflicting!
     // if (authBtn) {
     //     authBtn.addEventListener("click", () => {
@@ -625,6 +1120,16 @@ function initEventListeners() {
     // Send message on button click
     if (sendChatBtn) sendChatBtn.addEventListener("click", handleChat);
     if (stopChatBtn) stopChatBtn.addEventListener("click", requestStopGeneration);
+    if (imageModeBtn) {
+        imageModeBtn.addEventListener("click", () => {
+            if (pendingMediaSelected) {
+                alert("Remove selected file to use image generation mode.");
+                return;
+            }
+            setImageMode(!imageModeEnabled);
+            chatInput?.focus();
+        });
+    }
     
     // Send message on Enter (without Shift)
     if (chatInput) {
@@ -723,16 +1228,29 @@ function initEventListeners() {
             pendingMediaPreviewHref = URL.createObjectURL(file);
             pendingMediaSelected = true;
             pendingMediaLoading = true;
+            pendingDocumentContext = null;
+            setImageMode(false);
             pendingImageData = null;
             pendingImageName = file.name || "file";
             pendingMediaType = String(file.type || "");
 
             const reader = new FileReader();
-            reader.onload = () => {
+            reader.onload = async () => {
                 pendingImageData = String(reader.result || "");
-                pendingMediaLoading = false;
                 pendingImageName = file.name || "file";
                 pendingMediaType = String(file.type || "");
+                try {
+                    const docReady = await handleDocumentUpload(file);
+                    pendingDocumentContext = docReady ? { name: pendingImageName, type: pendingMediaType } : null;
+                } catch (error) {
+                    console.error("Document extraction failed:", error);
+                    pendingDocumentContext = null;
+                    if ((pendingMediaType || "").includes("pdf") || (pendingMediaType || "").startsWith("text/")) {
+                        showNotification(error.message || "Could not read document in browser.", "error");
+                    }
+                } finally {
+                    pendingMediaLoading = false;
+                }
                 renderSelectedMediaPreview({
                     mediaData: pendingImageData,
                     mediaName: pendingImageName,
@@ -741,7 +1259,9 @@ function initEventListeners() {
                 });
 
                 if (chatInput) {
-                    chatInput.placeholder = "Add prompt for selected file...";
+                    chatInput.placeholder = pendingDocumentContext
+                      ? "Ask a question about the loaded document..."
+                      : "Add prompt for selected file...";
                     chatInput.focus();
                 }
             };
@@ -751,6 +1271,7 @@ function initEventListeners() {
                 pendingMediaType = "";
                 pendingMediaSelected = false;
                 pendingMediaLoading = false;
+                pendingDocumentContext = null;
                 revokePendingMediaPreviewHref();
                 alert("Failed to read file.");
             };
@@ -769,6 +1290,12 @@ function initEventListeners() {
             historySidebar.classList.remove("active");
             historySidebar.style.display = "none";
             historySidebar.style.transform = "translateX(-100%)";
+        }
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && memoryModal && !memoryModal.hidden) {
+            closeMemoryModal();
         }
     });
     
@@ -1063,10 +1590,12 @@ async function loadChatFromServer(chatId) {
         
         const data = await resp.json();
         chatbox.innerHTML = "";
+        conversationMemory = [];
         
         (data.messages || []).forEach(msg => {
             if (msg.role === "user") {
                 chatbox.appendChild(createChatLi(msg.message, "outgoing"));
+                conversationMemory.push({ role: "user", text: msg.message });
             } else {
                 const li = createChatLi("", "incoming");
                 const content = li.querySelector(".bot-message-content");
@@ -1078,6 +1607,7 @@ async function loadChatFromServer(chatId) {
                 ensureMsgActions(li.querySelector(".bot-message-container"));
                 
                 chatbox.appendChild(li);
+                conversationMemory.push({ role: "assistant", text: msg.message });
             }
         });
         
@@ -1162,17 +1692,27 @@ function handleChat() {
     const imageName = pendingImageName;
     const mediaType = pendingMediaType;
     const mediaWasSelected = pendingMediaSelected;
+    const localDocumentContext = pendingDocumentContext;
     pendingImageData = null;
     pendingImageName = "";
     pendingMediaType = "";
     pendingMediaSelected = false;
     pendingMediaLoading = false;
+    pendingDocumentContext = null;
     revokePendingMediaPreviewHref();
     if (imageUploadInput) imageUploadInput.value = "";
-    if (chatInput) chatInput.placeholder = "Ask anything with GENIE...";
+    if (chatInput) {
+      chatInput.placeholder = imageModeEnabled
+        ? "Describe the image you want to generate..."
+        : "Ask anything with GENIE...";
+    }
     clearSelectedMediaPreview();
 
     const hasMediaPayload = mediaWasSelected && isAnyDataUrl(imageData);
+    const shouldUseLocalDocumentChat =
+      !!localDocumentContext &&
+      ((mediaType || "").includes("pdf") || (mediaType || "").startsWith("text/") || ["application/json", "text/csv", "application/xml", "text/xml", "application/javascript", "text/javascript"].includes((mediaType || "").toLowerCase()));
+    const shouldGenerateImage = !hasMediaPayload && imageModeEnabled && !!userMessage;
 
     if (mediaWasSelected && !hasMediaPayload) {
         const errorLi = createChatLi(
@@ -1202,7 +1742,13 @@ function handleChat() {
     // Show typing indicator and generate response
     setTimeout(() => {
         const typingLi = showTypingIndicator();
-        const requestMode = hasMediaPayload ? "media" : "chat";
+        const requestMode = shouldUseLocalDocumentChat
+          ? "chat"
+          : hasMediaPayload
+          ? "media"
+          : shouldGenerateImage
+            ? "image"
+            : "chat";
         console.log(`[GENIE] Client requestMode=${requestMode} mediaWasSelected=${mediaWasSelected}`);
         generateResponse(
           typingLi,
@@ -1230,10 +1776,11 @@ async function generateResponse(
   const messageElement = convertTypingToMessage(incomingChatli);
   messageElement.innerHTML = "Thinking<span class='dots'></span>";
   const hasMediaUpload = requestMode === "media";
+  const isImageGeneration = requestMode === "image";
   let responseRenderingStarted = false;
 
   // Check for special commands
-  if (await handleSpecialCommands(messageElement, userMessage)) {
+  if (!isImageGeneration && (await handleSpecialCommands(messageElement, userMessage))) {
     setComposerBusy(false);
     return;
   }
@@ -1248,9 +1795,10 @@ async function generateResponse(
     }
     const controller = new AbortController();
     activeRequestController = controller;
-    const requestTimeoutMs = hasMediaUpload ? 300000 : 30000;
+    const requestTimeoutMs = hasMediaUpload || isImageGeneration ? 300000 : 30000;
     timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     let responseText = "";
+    let generatedImageUrl = "";
 
     if (hasMediaUpload) {
       if (!isAnyDataUrl(mediaUpload?.mediaData)) {
@@ -1292,8 +1840,30 @@ async function generateResponse(
         const data = await response.json();
         responseText = data.reply || "No response from AI.";
       }
+    } else if (isImageGeneration) {
+      console.log("[GENIE] Route: /generate-image");
+      const response = await apiFetch(`${BACKEND_URL}/generate-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId: activeChatId,
+          prompt: userMessage.trim(),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        responseText = data?.reply || data?.error || "Image generation failed. Please try again.";
+      } else {
+        responseText = data?.reply || "Image generated.";
+        generatedImageUrl = String(data?.imageUrl || "").trim();
+      }
     } else {
       console.log("[GENIE] Route: /chat");
+      saveExtractedMemories(userMessage);
+      const promptPayload = getStructuredPromptForQuestion(userMessage);
       const response = await apiFetch(`${BACKEND_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1301,6 +1871,12 @@ async function generateResponse(
           userId: userId,
           chatId: activeChatId,
           message: userMessage.trim(),
+          promptEnvelope: promptPayload.message,
+          clientContextMeta: {
+            usedMemory: promptPayload.usedMemory,
+            usedDocument: promptPayload.usedDocument,
+            activeDocumentName: activeDocumentContext?.name || "",
+          },
         }),
         signal: controller.signal,
       });
@@ -1318,12 +1894,21 @@ async function generateResponse(
     responseText = normalizeInlineCodeArtifacts(responseText);
     throwIfGenerationStopped();
     responseRenderingStarted = true;
-    messageElement.innerHTML = "";
-    const textSpeed =
-      responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
-    await typeTextAndCode(messageElement, responseText, textSpeed, 5);
-    throwIfGenerationStopped();
-    messageElement.innerHTML = parseFencedBlocks(responseText);
+
+    if (isImageGeneration && generatedImageUrl) {
+      messageElement.innerHTML = createGeneratedImageReplyHtml({
+        imageUrl: generatedImageUrl,
+        prompt: userMessage,
+      });
+    } else {
+      messageElement.innerHTML = "";
+      const textSpeed =
+        responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
+      await typeTextAndCode(messageElement, responseText, textSpeed, 5);
+      throwIfGenerationStopped();
+      renderAssistantMessage(messageElement, responseText);
+    }
+
     if (window.Prism) Prism.highlightAllUnder(messageElement);
     enableCopyButtons(messageElement);
     ensureMsgActions(messageElement.closest(".bot-message-container"));
@@ -1359,12 +1944,16 @@ async function generateResponse(
       } else {
         messageElement.innerHTML = hasMediaUpload
           ? "Media analysis is still running and took too long. Please retry in a moment."
-          : "Request timed out. Please try again.";
+          : isImageGeneration
+            ? "Image generation took too long. Please retry in a moment."
+            : "Request timed out. Please try again.";
       }
     } else {
       messageElement.innerHTML = hasMediaUpload
         ? "Media analysis failed or service is busy. Please try again shortly."
-        : "Failed to get response. Please try again.";
+        : isImageGeneration
+          ? "Image generation failed or service is busy. Please try again shortly."
+          : "Failed to get response. Please try again.";
     }
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -1432,8 +2021,8 @@ Wind Speed: ${windSpeed} m/s`;
     
     // Clear memory command
     if (lowerMessage.includes("clear memory")) {
-        conversationMemory = [];
-        messageElement.innerHTML = "ðŸ§  Memory cleared.";
+        clearMemories();
+        messageElement.innerHTML = "Memory cleared.";
         return true;
     }
     
@@ -1470,6 +2059,15 @@ function renderAssistantMessage(contentElement, messageText) {
         box.textContent = text;
         contentElement.innerHTML = "";
         contentElement.appendChild(box);
+        return;
+    }
+    if (isGeneratedImageReplyText(text)) {
+        const imageUrl = extractFirstHttpUrl(text);
+        const promptMatch = text.match(/^Generated image for:\s*"?(.*?)"?\s*(?:\n|$)/i);
+        contentElement.innerHTML = createGeneratedImageReplyHtml({
+            imageUrl,
+            prompt: promptMatch?.[1] || "Generated image",
+        });
         return;
     }
     contentElement.innerHTML = parseFencedBlocks(text);
@@ -1663,9 +2261,12 @@ function ensureMsgActions(container) {
 // 8. CODE BLOCKS AND FORMATTING
 function normalizeInlineCodeArtifacts(text) {
     return String(text || "")
+      .replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, "")
+      .replace(/<\/?think\b[^>]*>/gi, "")
       // Wrap leaked placeholder tokens as inline markdown code without changing content.
       .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*_?\s*\d+\s*@{1,2})/gi, "`$1`")
-      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`");
+      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`")
+      .trim();
 }
 
 function parseFencedBlocks(text) {
