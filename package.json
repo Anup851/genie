@@ -1,21 +1,21 @@
 {
-  "name": "chatbot-using-api-main",
+  "name": "genie-ai-chatbot",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@replit/database": "^2.0.5",
     "@supabase/supabase-js": "^2.93.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "langchain": "^0.3.0",
     "node-fetch": "^2.7.0"
   }
 }

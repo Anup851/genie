@@ -6,6 +6,10 @@ import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { createChatService, fetchGdeltArticles } from "./services/chatService.js";
+import { createHistoryService } from "./services/historyService.js";
+import { createSarvamService } from "./services/sarvamService.js";
+import { cleanAssistantReply } from "./utils/messageFormatter.js";
 
 dotenv.config({ quiet: true });
 
@@ -23,25 +27,7 @@ const GEMINI_MEDIA_MODEL = String(
 const GEMINI_API_VERSION = String(
   process.env.GEMINI_API_VERSION || "v1beta",
 ).trim();
-
-function normalizeInlineCodeArtifacts(text) {
-  return (
-    String(text || "")
-      // Wrap leaked placeholder tokens as inline markdown code without changing content.
-      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*_?\s*\d+\s*@{1,2})/gi, "`$1`")
-      .replace(/(@{1,2}\s*INL\w*\s*_?\s*CODE\s*@{1,2})/gi, "`$1`")
-  );
-}
-
-function repairMarkdownCodeFences(text) {
-  const input = String(text || "");
-  if (!input) return "";
-
-  // If fenced code blocks are unbalanced, close the last fence to avoid broken rendering.
-  const fenceCount = (input.match(/```/g) || []).length;
-  if (fenceCount % 2 === 0) return input;
-  return `${input}\n\`\`\``;
-}
+const DEEPAI_API_BASE = "https://api.deepai.org/api";
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://nikzyppkwedmzldghrgh.supabase.co";
@@ -109,30 +95,46 @@ const AUTO_CLEAN_THRESHOLD = 120;
 const CLEAN_KEEP_RECENT = 40;
 const SESSION_LIMIT_WARNING = 100;
 
+const historyService = createHistoryService({
+  db,
+  config: {
+    maxSessions: MAX_SESSIONS,
+    maxHistoryLength: MAX_HISTORY_LENGTH,
+    maxMessageLength: MAX_MESSAGE_LENGTH,
+    autoCleanThreshold: AUTO_CLEAN_THRESHOLD,
+    cleanKeepRecent: CLEAN_KEEP_RECENT,
+  },
+});
+
+const sarvamService = createSarvamService({
+  apiKey: process.env.SARVAM_API_KEY,
+});
+
+const chatService = createChatService({
+  historyService,
+  sarvamService,
+  config: {
+    maxResponseTokens: MAX_RESPONSE_TOKENS,
+    sessionLimitWarning: SESSION_LIMIT_WARNING,
+  },
+});
+
+const {
+  createSession,
+  ensureSession,
+  forceCleanChat,
+  getChatHistory,
+  listSessions,
+  saveMessage,
+  saveSessions,
+  sessionMessagesKey,
+  touchSession,
+  unwrapDbData,
+} = historyService;
+
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
-
-function unwrapDbData(data) {
-  if (!data) return null;
-  let result = data;
-  while (
-    result &&
-    typeof result === "object" &&
-    Object.prototype.hasOwnProperty.call(result, "value")
-  ) {
-    result = result.value;
-  }
-  return result;
-}
-
-function sanitizeInput(text) {
-  if (typeof text !== "string") return "";
-  if (text.length > 50000) {
-    return text.slice(0, 50000).trim() + "\n\n[Message too long]";
-  }
-  return text.slice(0, MAX_MESSAGE_LENGTH).trim();
-}
 
 // Current server time in IST for deterministic date/time answers.
 function getISTString() {
@@ -150,208 +152,6 @@ function getISTString() {
   const get = (type) => parts.find((p) => p.type === type)?.value || "00";
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")} IST`;
 }
-
-function isNewsQuery(message) {
-  const text = String(message || "").toLowerCase();
-  return /\b(news|latest|today|current events?|breaking|headlines?|what happened)\b/.test(
-    text,
-  );
-}
-
-function simplifyNewsQuery(raw) {
-  const input = String(raw || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ");
-  const stop = new Set([
-    "the",
-    "a",
-    "an",
-    "of",
-    "in",
-    "on",
-    "at",
-    "for",
-    "to",
-    "and",
-    "or",
-    "is",
-    "are",
-    "was",
-    "were",
-    "what",
-    "happened",
-    "today",
-    "latest",
-    "news",
-    "current",
-    "events",
-    "breaking",
-    "headlines",
-    "new",
-    "about",
-  ]);
-  const terms = input
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter((w) => w && !stop.has(w));
-  if (!terms.length) return "current world news";
-  return terms.slice(0, 6).join(" ");
-}
-
-function inferNewsTimespan(rawQuery) {
-  const text = String(rawQuery || "").toLowerCase();
-  if (
-    /\b(last\s*24\s*hours?|24\s*hours?|today|current|latest|now)\b/.test(text)
-  ) {
-    return "24h";
-  }
-  return "";
-}
-
-function buildNewsQueryCandidates(rawQuery) {
-  const raw = String(rawQuery || "").trim();
-  const simple = simplifyNewsQuery(raw);
-  const candidates = [];
-  if (raw) candidates.push(raw);
-  if (simple && simple !== raw) candidates.push(simple);
-  if (simple) candidates.push(`${simple} sourcelang:english`);
-
-  // Topic-focused fallback when user asks very broad news.
-  if (/\bindia\b/i.test(raw) && !/\bindia\b/i.test(simple)) {
-    candidates.push(`india sourcelang:english`);
-  } else if (/\bindia\b/i.test(raw)) {
-    candidates.push(`india ${simple} sourcelang:english`);
-  }
-
-  // Deduplicate while preserving order.
-  return Array.from(new Set(candidates.map((q) => q.trim()).filter(Boolean)));
-}
-
-async function fetchGdeltDocJson(query, maxRecords, timespan = "") {
-  const params = new URLSearchParams({
-    query,
-    mode: "ArtList",
-    maxrecords: String(maxRecords),
-    format: "json",
-    sort: "hybridrel",
-  });
-  if (timespan) params.set("timespan", timespan);
-
-  const url = `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`;
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "GenieChatbot/1.0 (+gdelt-doc2.1)",
-    },
-  });
-
-  const rawText = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `GDELT request failed: ${response.status} ${rawText.slice(0, 160)}`,
-    );
-  }
-
-  try {
-    return JSON.parse(rawText);
-  } catch {
-    throw new Error(`GDELT non-JSON response: ${rawText.slice(0, 220)}`);
-  }
-}
-
-async function fetchGdeltArticles(query, maxRecords = 10) {
-  const q = String(query || "").trim();
-  const safeMax = Math.max(1, Math.min(Number(maxRecords) || 10, 20));
-  if (!q) return [];
-
-  const timespan = inferNewsTimespan(q);
-  const candidates = buildNewsQueryCandidates(q);
-  let lastError = null;
-
-  for (const candidate of candidates) {
-    try {
-      const data = await fetchGdeltDocJson(candidate, safeMax, timespan);
-      const articles = Array.isArray(data?.articles) ? data.articles : [];
-      if (!articles.length) continue;
-      return articles.map((a) => ({
-        title: String(a?.title || "").trim() || null,
-        source:
-          String(a?.sourceCommonName || a?.domain || a?.source || "").trim() ||
-          null,
-        url: String(a?.url || "").trim() || null,
-        published:
-          String(a?.seendate || a?.date || a?.publishDateTime || "").trim() ||
-          null,
-      }));
-    } catch (err) {
-      lastError = err;
-      continue;
-    }
-  }
-
-  if (lastError) throw lastError;
-  return [];
-}
-
-function sessionsKey(userId) {
-  return `sessions_${userId}`;
-}
-
-function sessionMessagesKey(userId, chatId) {
-  return `chat_${userId}_${chatId}`;
-}
-
-function makeChatId() {
-  return (
-    "c_" +
-    Date.now().toString(36) +
-    "_" +
-    Math.random().toString(36).slice(2, 7)
-  );
-}
-
-function isCodeHeavyMessage(message) {
-  if (!message || typeof message !== "string") return false;
-  const trimmed = message.trim();
-  if (trimmed.includes("```")) return true;
-  const codePatterns = [
-    /(function|def|class|import|export|const|let|var)\b/,
-    /(if|else|for|while|return|try|catch|finally)\b/,
-  ];
-  return codePatterns.some((pattern) => pattern.test(trimmed));
-}
-
-function getOptimizedParams(message) {
-  const isCodeHeavy = isCodeHeavyMessage(message);
-  return {
-    isCodeHeavy,
-    maxTokens: isCodeHeavy ? MAX_RESPONSE_TOKENS : 1000,
-    timeout: isCodeHeavy ? 60000 : 30000,
-    historyLimit: isCodeHeavy ? 8 : 12,
-    temperature: isCodeHeavy ? 0.25 : 0.6,
-  };
-}
-
-function buildChatSystemPrompt({ isCodeHeavy = false } = {}) {
-  const codingMode = isCodeHeavy
-    ? "When coding is requested, provide complete runnable code with exact file names and minimal required steps."
-    : "When coding is requested, provide practical snippets and avoid unnecessary verbosity.";
-
-  return [
-    "You are Genie, a reliable AI assistant for practical help.",
-    "Reply in the same language as the user's latest message unless the user asks for another language.",
-    "Be clear, direct, and helpful. Avoid filler and repetition.",
-    codingMode,
-    "For any multi-line code, always use fenced markdown code blocks with triple backticks and a language tag when known.",
-    "Do not leave code fences unclosed.",
-    "Never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
-    "Always format inline code with backticks (example: `nums`).",
-    "If information is uncertain, state assumptions briefly instead of guessing facts.",
-  ].join(" ");
-}
-
 function buildMediaSystemPrompt(mimeType = "") {
   const mime = String(mimeType || "").toLowerCase();
   const extractionMode =
@@ -368,71 +168,6 @@ function buildMediaSystemPrompt(mimeType = "") {
     "Do not leave code fences unclosed.",
     "Always format inline code with backticks and never output placeholder tokens like @@INLINECODE0@@ or @@INLINE_CODE_0@@.",
   ].join(" ");
-}
-
-// Build deterministic instruction context used for Sarvam requests.
-function buildSarvamInstructionBlock(nowIST) {
-  return [
-    `Current date/time is: ${nowIST}. If the user asks for time/date/day, use this. Do not guess.`,
-    "If NEWS_RESULTS is present, use ONLY NEWS_RESULTS for current events. If empty, say you don't have live news results. Do NOT guess.",
-  ].join(" ");
-}
-
-function isSarvamTurnOrderError(errorText = "") {
-  const text = String(errorText || "").toLowerCase();
-  return (
-    text.includes("first message must be from user") ||
-    (text.includes("starting with a user message") &&
-      text.includes("must alternate"))
-  );
-}
-
-// Normalize turns for strict providers that require: user, assistant, user...
-function normalizeSarvamMessages(messages = [], opts = {}) {
-  const includeSystem = opts.includeSystem !== false;
-  const systemText = String(opts.systemText || "");
-  const result = [];
-
-  if (includeSystem && systemText) {
-    result.push({ role: "system", content: systemText });
-  }
-
-  const turns = [];
-  for (const m of messages) {
-    if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
-    const content = String(m.content || "").trim();
-    if (!content) continue;
-
-    if (!turns.length) {
-      if (m.role !== "user") continue; // drop leading assistant turns
-      turns.push({ role: "user", content });
-      continue;
-    }
-
-    const prev = turns[turns.length - 1];
-    if (prev.role === m.role) {
-      // keep context without breaking strict alternation
-      prev.content = `${prev.content}\n\n${content}`;
-    } else {
-      turns.push({ role: m.role, content });
-    }
-  }
-
-  // Ensure at least one user message exists.
-  if (!turns.length) {
-    turns.push({ role: "user", content: "Hello" });
-  }
-
-  // If last turn is assistant, add a tiny user nudge so model can respond.
-  if (turns[turns.length - 1].role !== "user") {
-    turns.push({ role: "user", content: "Please continue." });
-  }
-
-  if (!includeSystem && systemText && turns[0]?.role === "user") {
-    turns[0].content = `[INSTRUCTION]\n${systemText}\n\n${turns[0].content}`;
-  }
-
-  return result.concat(turns);
 }
 
 function isTextLikeMime(mimeType) {
@@ -523,6 +258,56 @@ async function callGeminiGenerateContent({
   throw err;
 }
 
+async function callDeepAiTextToImage(prompt, signal) {
+  const apiKey = String(process.env.DEEPAI_API_KEY || "").trim();
+  if (!apiKey) {
+    const err = new Error("Missing DEEPAI_API_KEY");
+    err.code = "MISSING_DEEPAI_KEY";
+    throw err;
+  }
+
+  const response = await fetch(`${DEEPAI_API_BASE}/text2img`, {
+    method: "POST",
+    headers: {
+      "Api-Key": apiKey,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ text: String(prompt || "") }).toString(),
+    signal,
+  });
+
+  const raw = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const err = new Error(
+      `DeepAI API error: ${response.status} ${raw.slice(0, 240)}`,
+    );
+    err.status = response.status;
+    throw err;
+  }
+
+  const imageUrl = String(
+    parsed?.output_url || parsed?.outputUrl || parsed?.image || "",
+  ).trim();
+
+  if (!imageUrl) {
+    const err = new Error(`DeepAI API returned no image URL: ${raw.slice(0, 240)}`);
+    err.status = 502;
+    throw err;
+  }
+
+  return {
+    imageUrl,
+    id: parsed?.id || "",
+  };
+}
+
 async function supabaseAuthRequired(req, res, next) {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -535,319 +320,6 @@ async function supabaseAuthRequired(req, res, next) {
 
   req.auth = { sub: data.user.id, email: data.user.email || null };
   next();
-}
-// ============================================================
-// SESSION FUNCTIONS - FIXED
-// ============================================================
-
-// Ensure session exists
-async function ensureSession(userId, chatId) {
-  if (
-    !chatId ||
-    chatId === "default" ||
-    chatId === "null" ||
-    chatId === "undefined"
-  ) {
-    return null;
-  }
-
-  try {
-    const sessions = await listSessions(userId);
-    let session = sessions.find((s) => s.chatId === chatId);
-
-    if (session) {
-      return session;
-    }
-
-    console.log(`ðŸ†• Creating new session for chatId: ${chatId}`);
-    session = {
-      chatId,
-      title: "New chat",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    sessions.unshift(session);
-    await saveSessions(userId, sessions);
-    await db.set(sessionMessagesKey(userId, chatId), []);
-
-    return session;
-  } catch (err) {
-    console.error("âŒ ensureSession error:", err);
-    return null;
-  }
-}
-
-// Update session title
-async function updateSessionTitle(userId, chatId, userMessage) {
-  if (!userId || !chatId || !userMessage) return null;
-
-  try {
-    const sessions = await listSessions(userId);
-    const sessionIndex = sessions.findIndex((s) => s.chatId === chatId);
-
-    if (sessionIndex === -1) return null;
-
-    const session = sessions[sessionIndex];
-
-    // ONLY update if title is "New chat"
-    if (session.title !== "New chat") {
-      return session;
-    }
-
-    // Create title from first user message
-    let newTitle = userMessage.trim();
-
-    // Clean the title
-    newTitle = newTitle
-      .replace(/\n/g, " ")
-      .replace(/\s+/g, " ")
-      .replace(/[^\w\s]/g, "")
-      .trim();
-
-    // Truncate if too long
-    if (newTitle.length > 35) {
-      newTitle = newTitle.substring(0, 35) + "...";
-    }
-
-    // If empty, keep default
-    if (!newTitle || newTitle.length === 0) {
-      newTitle = "New chat";
-    }
-
-    // Update session
-    session.title = newTitle;
-    session.updatedAt = Date.now();
-
-    // Move to top
-    sessions.splice(sessionIndex, 1);
-    sessions.unshift(session);
-
-    await saveSessions(userId, sessions);
-    console.log(`âœ… Title updated: "${newTitle}" for ${chatId}`);
-
-    return session;
-  } catch (err) {
-    console.error("âŒ updateSessionTitle error:", err);
-    return null;
-  }
-}
-
-// Touch session
-async function touchSession(userId, chatId, userMessage = null) {
-  if (!chatId || chatId === "default" || chatId === "null") return null;
-
-  try {
-    const sessions = await listSessions(userId);
-    const idx = sessions.findIndex((s) => s.chatId === chatId);
-    if (idx === -1) return null;
-
-    // Update timestamp
-    sessions[idx].updatedAt = Date.now();
-
-    // Move to top
-    const [session] = sessions.splice(idx, 1);
-    sessions.unshift(session);
-
-    await saveSessions(userId, sessions);
-
-    // Update title if this is first message
-    if (userMessage) {
-      await updateSessionTitle(userId, chatId, userMessage);
-    }
-
-    return session;
-  } catch (err) {
-    console.error("âŒ touchSession error:", err);
-    return null;
-  }
-}
-
-// ============================================================
-// AUTO-CLEAN FUNCTIONS
-// ============================================================
-
-async function autoCleanChatHistory(userId, chatId) {
-  try {
-    const key = sessionMessagesKey(userId, chatId);
-    const raw = await db.get(key);
-    const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
-
-    if (history.length <= AUTO_CLEAN_THRESHOLD) {
-      return history;
-    }
-
-    console.log(
-      `ðŸ§¹ Auto-cleaning chat ${chatId}: ${history.length} â†’ ${CLEAN_KEEP_RECENT} messages`,
-    );
-
-    const cleanedHistory = history.slice(-CLEAN_KEEP_RECENT);
-
-    const finalHistory = [];
-    for (let i = 0; i < cleanedHistory.length; i++) {
-      const current = cleanedHistory[i];
-      const previous = cleanedHistory[i - 1];
-
-      if (
-        previous &&
-        current.role === previous.role &&
-        current.message === previous.message
-      ) {
-        continue;
-      }
-
-      finalHistory.push(current);
-    }
-
-    await db.set(key, finalHistory);
-    console.log(`âœ… Cleaned to ${finalHistory.length} messages`);
-    return finalHistory;
-  } catch (err) {
-    console.error("âŒ Auto-clean error:", err);
-    return [];
-  }
-}
-
-async function forceCleanChat(userId, chatId) {
-  try {
-    const key = sessionMessagesKey(userId, chatId);
-    const raw = await db.get(key);
-    const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
-
-    console.log(
-      `ðŸ§¨ Force cleaning chat ${chatId}: ${history.length} messages`,
-    );
-
-    const recentHistory = history.slice(-20);
-
-    const cleaned = [];
-    for (let i = 0; i < recentHistory.length; i++) {
-      const current = recentHistory[i];
-      const previous = recentHistory[i - 1];
-
-      if (
-        !previous ||
-        !(
-          current.role === previous.role && current.message === previous.message
-        )
-      ) {
-        cleaned.push(current);
-      }
-    }
-
-    await db.set(key, cleaned);
-    console.log(`âœ… Force cleaned to ${cleaned.length} messages`);
-    return cleaned;
-  } catch (err) {
-    console.error("âŒ Force clean error:", err);
-    return [];
-  }
-}
-
-// ============================================================
-// DATABASE FUNCTIONS
-// ============================================================
-
-async function listSessions(userId) {
-  const raw = await db.get(sessionsKey(userId));
-  const sessions = unwrapDbData(raw);
-  return Array.isArray(sessions) ? sessions : [];
-}
-
-async function saveSessions(userId, sessions) {
-  await db.set(sessionsKey(userId), sessions.slice(0, MAX_SESSIONS));
-}
-
-async function createSession(userId, title = "New chat") {
-  const sessions = await listSessions(userId);
-  const chatId = makeChatId();
-
-  let sessionTitle = "New chat";
-  if (title && title !== "New chat" && title.trim().length > 0) {
-    sessionTitle = title.trim().slice(0, 40);
-  }
-
-  const session = {
-    chatId,
-    title: sessionTitle,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  sessions.unshift(session);
-  await saveSessions(userId, sessions);
-  await db.set(sessionMessagesKey(userId, chatId), []);
-
-  return session;
-}
-
-async function saveMessage(userId, role, message, chatId = "default") {
-  try {
-    const sanitizedMessage = sanitizeInput(message);
-    if (!sanitizedMessage) return null;
-
-    const key =
-      chatId === "default"
-        ? `chat_${userId}`
-        : sessionMessagesKey(userId, chatId);
-
-    const raw = await db.get(key);
-    const history = Array.isArray(unwrapDbData(raw)) ? unwrapDbData(raw) : [];
-
-    const validRole = role === "user" ? "user" : "assistant";
-
-    const lastMsg = history[history.length - 1];
-    if (
-      lastMsg &&
-      lastMsg.role === validRole &&
-      lastMsg.message === sanitizedMessage
-    ) {
-      return history;
-    }
-
-    history.push({
-      role: validRole,
-      message: sanitizedMessage,
-      timestamp: Date.now(),
-    });
-
-    if (history.length > AUTO_CLEAN_THRESHOLD) {
-      const cleaned = await autoCleanChatHistory(userId, chatId);
-      return cleaned;
-    }
-
-    if (history.length > MAX_HISTORY_LENGTH) {
-      history.splice(0, history.length - MAX_HISTORY_LENGTH);
-    }
-
-    await db.set(key, history);
-    return history;
-  } catch (err) {
-    console.error("âŒ saveMessage error:", err);
-    return null;
-  }
-}
-
-async function getChatHistory(userId, chatId = "default") {
-  try {
-    const key =
-      chatId === "default"
-        ? `chat_${userId}`
-        : sessionMessagesKey(userId, chatId);
-    const raw = await db.get(key);
-    const history = unwrapDbData(raw);
-
-    if (!Array.isArray(history)) return [];
-
-    if (history.length > AUTO_CLEAN_THRESHOLD) {
-      return await autoCleanChatHistory(userId, chatId);
-    }
-
-    return history;
-  } catch (err) {
-    console.error("âŒ getChatHistory error:", err);
-    return [];
-  }
 }
 
 // ============================================================
@@ -1013,9 +485,7 @@ async function analyzeMediaHandler(req, res) {
       model: GEMINI_MEDIA_MODEL,
     });
 
-    const reply = repairMarkdownCodeFences(
-      normalizeInlineCodeArtifacts(rawReply || "I could not analyze this file."),
-    );
+    const reply = cleanAssistantReply(rawReply || "I could not analyze this file.");
 
     await saveMessage(
       userId,
@@ -1055,6 +525,67 @@ async function analyzeMediaHandler(req, res) {
 
 app.post("/analyze-media", supabaseAuthRequired, analyzeMediaHandler);
 app.post("/analyze-image", supabaseAuthRequired, analyzeMediaHandler);
+
+app.post("/generate-image", supabaseAuthRequired, async (req, res) => {
+  const userId = req.auth?.sub;
+  const { prompt, chatId } = req.body || {};
+  const activeChatId = chatId || "default";
+  const userPrompt = String(prompt || "").trim();
+
+  if (!userId || !userPrompt) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+
+  const rateLimit = checkRateLimit(userId);
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      reply: "Too many requests. Please wait a minute.",
+      isRateLimited: true,
+    });
+  }
+
+  if (activeChatId !== "default") {
+    await ensureSession(userId, activeChatId);
+  }
+
+  try {
+    const result = await callDeepAiTextToImage(userPrompt);
+    const reply = `Generated image for: "${userPrompt}"\n${result.imageUrl}`;
+
+    await saveMessage(userId, "user", userPrompt, activeChatId);
+    await saveMessage(userId, "assistant", reply, activeChatId);
+
+    const history = await getChatHistory(userId, activeChatId);
+    const isFirstMessage = history.length <= 2;
+    if (isFirstMessage) {
+      await touchSession(userId, activeChatId, userPrompt);
+    } else {
+      await touchSession(userId, activeChatId);
+    }
+
+    return res.json({
+      reply,
+      imageUrl: result.imageUrl,
+      provider: "deepai",
+    });
+  } catch (err) {
+    if (err?.code === "MISSING_DEEPAI_KEY") {
+      return res.status(200).json({
+        reply:
+          "Image generation is not configured on backend. Add DEEPAI_API_KEY in .env and restart server.",
+      });
+    }
+    console.error("/generate-image error:", err);
+    if (Number(err?.status) >= 400 && Number(err?.status) < 500) {
+      return res.status(Number(err.status)).json({
+        reply: `Image provider error (${err.status}): ${err.message}`,
+      });
+    }
+    return res.status(500).json({
+      reply: `Image generation failed: ${err?.message || "Unknown error"}`,
+    });
+  }
+});
 
 // Save client-side/manual replies (e.g., weather special command) into chat history.
 app.post("/chat/manual", supabaseAuthRequired, async (req, res) => {
@@ -1132,7 +663,7 @@ app.post("/chat/rollback-last", supabaseAuthRequired, async (req, res) => {
 
 app.post("/chat", supabaseAuthRequired, async (req, res) => {
   const userId = req.auth?.sub;
-  const { message, chatId } = req.body || {};
+  const { message, chatId, promptEnvelope } = req.body || {};
   const activeChatId = chatId || "default";
   let clientDisconnected = false;
   req.on("close", () => {
@@ -1159,128 +690,9 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
       `[KEY CHECK] route=/chat provider=SARVAM key=${sarvamKeyPreview} chatId=${activeChatId}`,
     );
 
-    const sanitizedMessage = message.trim();
-    const optimizedParams = getOptimizedParams(sanitizedMessage);
-    const nowIST = getISTString();
-    const wantsNews = isNewsQuery(sanitizedMessage);
-    let newsArticles = [];
-    let newsFetchFailed = false;
-
-    if (wantsNews) {
-      try {
-        // Use simplified topic text for better GDELT hit rate.
-        newsArticles = await fetchGdeltArticles(
-          simplifyNewsQuery(sanitizedMessage),
-          10,
-        );
-      } catch (newsErr) {
-        newsFetchFailed = true;
-        console.error("/chat news fetch error:", newsErr);
-      }
-    }
-
     console.log(
-      `ðŸ’¬ Chat request: ${userId.slice(0, 8)}... | ${sanitizedMessage.length} chars | chatId: ${activeChatId}`,
+      `ðŸ’¬ Chat request: ${userId.slice(0, 8)}... | ${String(message).trim().length} chars | chatId: ${activeChatId}`,
     );
-
-    // âœ… ENSURE SESSION EXISTS
-    if (activeChatId !== "default") {
-      await ensureSession(userId, activeChatId);
-    }
-
-    // âœ… GET HISTORY
-    let history = await getChatHistory(userId, activeChatId);
-
-    // ðŸŸ¡ðŸŸ¡ðŸŸ¡ CHECK SESSION LIMIT - ADD THIS BLOCK ðŸŸ¡ðŸŸ¡ðŸŸ¡
-    const sessionLimitExceeded = history.length >= SESSION_LIMIT_WARNING;
-    const sessionNearLimit = history.length >= SESSION_LIMIT_WARNING - 20;
-
-    if (sessionLimitExceeded) {
-      console.log(
-        `âš ï¸âš ï¸âš ï¸ SESSION LIMIT EXCEEDED: ${history.length} messages in chat ${activeChatId}`,
-      );
-
-      // Auto-clean will happen, but also warn user
-      return res.status(200).json({
-        reply:
-          "âš ï¸ **Chat session limit reached!** âš ï¸\n\nThis conversation has too many messages. Please **start a new chat** to continue smoothly.\n\nðŸ‘‰ Click **New Chat** button to create a fresh session.",
-        sessionLimitExceeded: true,
-        forceNewChat: true,
-        messageCount: history.length,
-      });
-    }
-
-    // âœ… CHECK IF FIRST MESSAGE
-    const isFirstMessage = history.length === 0;
-
-    // âœ… CLEAN IF NEEDED
-    if (history.length > 100) {
-      let hasDuplicates = false;
-      for (let i = 1; i < history.length; i++) {
-        if (
-          history[i].role === history[i - 1].role &&
-          history[i].message === history[i - 1].message
-        ) {
-          hasDuplicates = true;
-          break;
-        }
-      }
-      if (hasDuplicates) {
-        console.log("ðŸ”„ Detected duplicates, force cleaning...");
-        history = await forceCleanChat(userId, activeChatId);
-      }
-    }
-
-    // âœ… BUILD MESSAGES FOR AI
-    const messagesForAI = [];
-    const instructionBlock = buildSarvamInstructionBlock(nowIST);
-    messagesForAI.push({
-      role: "system",
-      content: [
-        buildChatSystemPrompt({
-          isCodeHeavy: optimizedParams.isCodeHeavy,
-        }),
-        instructionBlock,
-      ].join(" "),
-    });
-    const recentHistory = history.slice(-optimizedParams.historyLimit);
-    // Preserve history order; do not drop same-role consecutive messages.
-    for (const msg of recentHistory) {
-      if (!msg?.role || !msg?.message) continue;
-      if (msg.role !== "user" && msg.role !== "assistant") continue;
-      messagesForAI.push({
-        role: msg.role,
-        content: String(msg.message),
-      });
-    }
-
-    let userContent = sanitizedMessage;
-    if (wantsNews) {
-      let newsBlock = "NEWS_RESULTS: EMPTY";
-      if (newsArticles.length > 0) {
-        const top = newsArticles.slice(0, 10);
-        const lines = top.map((a, i) => {
-          const title = a.title || "[No title]";
-          const source = a.source || "[Unknown source]";
-          const published = a.published || "[Unknown time]";
-          const url = a.url || "[No URL]";
-          return `${i + 1}) ${title} — ${source} — ${published} — ${url}`;
-        });
-        newsBlock = `NEWS_RESULTS:\n${lines.join("\n")}`;
-      } else if (newsFetchFailed) {
-        newsBlock = "NEWS_RESULTS: EMPTY (live news fetch failed)";
-      }
-      userContent = `${newsBlock}\n\nUSER_MESSAGE:\n${sanitizedMessage}`;
-    }
-
-    // Ensure first non-system message is user for stricter gateways.
-    while (messagesForAI.length > 1 && messagesForAI[1].role !== "user") {
-      messagesForAI.splice(1, 1);
-    }
-    messagesForAI.push({
-      role: "user",
-      content: userContent,
-    });
 
     // âœ… CALL SARVAM AI
     const controller = new AbortController();
@@ -1289,131 +701,23 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
         controller.abort();
       } catch {}
     });
-    const timeout = setTimeout(
-      () => controller.abort(),
-      optimizedParams.timeout,
-    );
+    const timeout = setTimeout(() => controller.abort(), 60000);
 
-    const sarvamUrl = "https://api.sarvam.ai/v1/chat/completions";
-    const sarvamHeaders = {
-      "Content-Type": "application/json",
-      "api-subscription-key": process.env.SARVAM_API_KEY,
-    };
-    const basePayload = {
-      model: "sarvam-m",
-      max_tokens: optimizedParams.maxTokens,
-      temperature: optimizedParams.temperature,
-    };
-    const systemPromptText = messagesForAI[0]?.role === "system"
-      ? String(messagesForAI[0].content || "")
-      : "";
-    const strictMessages = normalizeSarvamMessages(messagesForAI, {
-      includeSystem: true,
-      systemText: systemPromptText,
-    });
-    let response = await fetch(sarvamUrl, {
-      method: "POST",
-      headers: sarvamHeaders,
-      body: JSON.stringify({
-        ...basePayload,
-        messages: strictMessages,
-      }),
+    const chatResult = await chatService.handleChat({
+      userId,
+      chatId: activeChatId,
+      message,
+      promptEnvelope,
       signal: controller.signal,
     });
 
     clearTimeout(timeout);
 
-    if (!response.ok) {
-      let errorText = await response.text();
-      console.error(
-        "âŒ Sarvam error:",
-        response.status,
-        errorText.substring(0, 200),
-      );
-
-      if (response.status === 400 && isSarvamTurnOrderError(errorText)) {
-        // Retry once with user-first strict formatting and inline instruction.
-        const fallbackMessages = normalizeSarvamMessages(messagesForAI, {
-          includeSystem: false,
-          systemText: systemPromptText || instructionBlock,
-        });
-
-        response = await fetch(sarvamUrl, {
-          method: "POST",
-          headers: sarvamHeaders,
-          body: JSON.stringify({
-            ...basePayload,
-            messages: fallbackMessages,
-          }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          errorText = await response.text();
-          console.error(
-            "âŒ Sarvam retry error:",
-            response.status,
-            errorText.substring(0, 200),
-          );
-        }
-      }
-      if (!response.ok) {
-        return res.status(200).json({
-          reply: "Sorry, AI service error. Please try again.",
-        });
-      }
-    }
-
-    const data = await response.json();
-    const reply = repairMarkdownCodeFences(
-      normalizeInlineCodeArtifacts(
-        data.choices?.[0]?.message?.content || "No response.",
-      ),
-    );
-
     // If client stopped/disconnected, do not persist or send cancelled response.
     if (clientDisconnected || req.aborted) {
       return;
     }
-
-    // âœ… SAVE MESSAGES
-    await saveMessage(userId, "user", sanitizedMessage, activeChatId);
-    await saveMessage(userId, "assistant", reply, activeChatId);
-
-    // âœ… UPDATE SESSION TITLE FOR FIRST MESSAGE
-    if (isFirstMessage) {
-      console.log(
-        `ðŸ“ FIRST MESSAGE - Updating title to: "${sanitizedMessage.slice(0, 35)}..."`,
-      );
-      await touchSession(userId, activeChatId, sanitizedMessage);
-    } else {
-      await touchSession(userId, activeChatId);
-    }
-
-    // ðŸŸ¡ðŸŸ¡ðŸŸ¡ ADD WARNING TO RESPONSE IF NEAR LIMIT ðŸŸ¡ðŸŸ¡ðŸŸ¡
-    let finalReply = reply;
-    let warning = null;
-
-    if (sessionNearLimit && !sessionLimitExceeded) {
-      const remaining = SESSION_LIMIT_WARNING - history.length;
-      warning = `\n\n---\nâš ï¸ **Warning:** This chat has ${history.length} messages. You have **${remaining} messages** left before session limit. Consider starting a new chat.`;
-      finalReply = reply + warning;
-    }
-
-    res.json({
-      reply: finalReply,
-      isLarge: reply.length > 5000,
-      historyCount: history.length + 2,
-      isFirstMessage,
-      sessionWarning: warning
-        ? {
-            messageCount: history.length,
-            remaining: SESSION_LIMIT_WARNING - history.length,
-            limit: SESSION_LIMIT_WARNING,
-          }
-        : null,
-      sessionLimitExceeded: false,
-    });
+    res.json(chatResult);
   } catch (err) {
     console.error("âŒ /chat error:", err);
     let reply = "Sorry, an error occurred.";
@@ -1754,6 +1058,7 @@ app.listen(PORT, () => {
 ðŸ“ Port: ${PORT}
 ðŸ” SARVAM_API_KEY (chat): ${process.env.SARVAM_API_KEY ? "Loaded" : "Missing!"}
 ðŸ” GEMINI_API_KEY (media): ${process.env.GEMINI_API_KEY ? "Loaded" : "Missing!"}
+ðŸ” DEEPAI_API_KEY (images): ${process.env.DEEPAI_API_KEY ? "Loaded" : "Missing!"}
 ðŸ§  GEMINI_MODEL: ${GEMINI_MODEL}
 ðŸ§  GEMINI_MEDIA_MODEL: ${GEMINI_MEDIA_MODEL}
 ðŸ§  GEMINI_API_VERSION: ${GEMINI_API_VERSION}
