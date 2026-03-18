@@ -1,12 +1,12 @@
 ﻿// server.js - Genie Backend (COMPLETE FIXED)
 import crypto from "crypto";
-import Database from "@replit/database";
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { createChatService, fetchGdeltArticles } from "./services/chatService.js";
+import { createKeyValueStore } from "./services/dataStore.js";
 import { createHistoryService } from "./services/historyService.js";
 import { createSarvamService } from "./services/sarvamService.js";
 import { cleanAssistantReply } from "./utils/messageFormatter.js";
@@ -14,7 +14,7 @@ import { cleanAssistantReply } from "./utils/messageFormatter.js";
 dotenv.config({ quiet: true });
 
 // --- Initialize ---
-const db = new Database();
+const db = createKeyValueStore();
 const app = express();
 const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash")
   .trim()
@@ -97,6 +97,7 @@ const SESSION_LIMIT_WARNING = 100;
 
 const historyService = createHistoryService({
   db,
+  unwrapDbData: (value) => value,
   config: {
     maxSessions: MAX_SESSIONS,
     maxHistoryLength: MAX_HISTORY_LENGTH,
@@ -119,6 +120,10 @@ const chatService = createChatService({
   },
 });
 
+console.log("[BOOT] Modular services ready: historyService, sarvamService, chatService");
+console.log("[BOOT] LangChain orchestration is enabled for normal /chat requests");
+console.log("[BOOT] Sarvam remains the final model provider for normal chat");
+
 const {
   createSession,
   ensureSession,
@@ -127,6 +132,7 @@ const {
   listSessions,
   saveMessage,
   saveSessions,
+  sessionsKey,
   sessionMessagesKey,
   touchSession,
   unwrapDbData,
@@ -693,6 +699,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     console.log(
       `ðŸ’¬ Chat request: ${userId.slice(0, 8)}... | ${String(message).trim().length} chars | chatId: ${activeChatId}`,
     );
+    console.log("[CHAT FLOW] Starting LangChain prompt orchestration -> Sarvam response flow");
 
     // âœ… CALL SARVAM AI
     const controller = new AbortController();
@@ -712,9 +719,13 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
     });
 
     clearTimeout(timeout);
+    console.log(
+      `[CHAT FLOW] Completed LangChain -> Sarvam flow | replyLength=${String(chatResult?.reply || "").length} | chatId=${activeChatId}`,
+    );
 
     // If client stopped/disconnected, do not persist or send cancelled response.
     if (clientDisconnected || req.aborted) {
+      console.log(`[CHAT FLOW] Client disconnected before response send | chatId=${activeChatId}`);
       return;
     }
     res.json(chatResult);
@@ -1074,6 +1085,8 @@ app.listen(PORT, () => {
 ðŸ§¹ AUTO-CLEAN: Clean at ${AUTO_CLEAN_THRESHOLD} messages
 ðŸ’¾ Database: Connected
 ðŸ§¾ Sessions: Max ${MAX_SESSIONS}
+ðŸ§± LangChain Orchestration: Enabled for /chat
+ðŸ¤– Chat Provider: Sarvam (unchanged)
 
 âœ… CHAT TITLE FIXED - First message will appear as title!
 âœ… DUPLICATE CHAT ENDPOINT REMOVED
