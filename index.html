@@ -63,7 +63,14 @@
 
       window.supabaseClient = supabase.createClient(
         SUPABASE_URL,
-        SUPABASE_ANON_KEY
+        SUPABASE_ANON_KEY,
+        {
+          auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true,
+          },
+        }
       );
 
       console.log("✅ Supabase initialized BEFORE script.js");

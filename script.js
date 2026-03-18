@@ -877,7 +877,7 @@ document.head.appendChild(style);
 
 // ================= APP CONFIG =================
 const WEATHER_API_KEY = "c4846573091c7b3978af67020443a2b4";
-const DEFAULT_BACKEND_URL = "https://8c4f04f8-814c-43a8-99c8-a96f45bfd9e6-00-1p3byqr3jjezl.sisko.replit.dev";
+const DEFAULT_BACKEND_URL = "https://genie-backend-1.onrender.com";
 const IS_LOCAL_HOST = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || "");
 const BACKEND_URL = IS_LOCAL_HOST
   ? "http://localhost:3000"
@@ -896,7 +896,38 @@ async function apiFetch(url, options = {}) {
     Authorization: `Bearer ${accessToken}`,
   };
 
-  return fetch(url, { ...options, headers });
+  let response = await fetch(url, { ...options, headers });
+  if (response.status !== 401 || !supabaseClient) {
+    return response;
+  }
+
+  try {
+    const { data, error } = await supabaseClient.auth.refreshSession();
+    const refreshedToken = data?.session?.access_token;
+    if (error || !refreshedToken) {
+      throw error || new Error("No refreshed session");
+    }
+
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${refreshedToken}`,
+      },
+    });
+
+    if (response.status !== 401) {
+      return response;
+    }
+  } catch (error) {
+    console.warn("Session refresh failed after 401:", error);
+  }
+
+  try {
+    await supabaseClient.auth.signOut();
+  } catch {}
+  window.location.href = "./auth.html";
+  throw new Error("Session expired");
 }
 
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
@@ -913,6 +944,12 @@ const STT_AUTO_SEND_PAUSE_MS = 1200;
 let isRequestInFlight = false;
 let activeRequestController = null;
 let stopGenerationRequested = false;
+
+function isUuidChatId(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || ""),
+  );
+}
 
 function requestStopGeneration() {
   stopGenerationRequested = true;
@@ -1351,6 +1388,11 @@ async function startChat() {
 async function ensureActiveChat() {
     const userId = await getUserId();  // âœ… Added await
     if (!userId) return;
+
+    if (activeChatId && !isUuidChatId(activeChatId)) {
+        activeChatId = null;
+        localStorage.removeItem("genie_activeChatId");
+    }
     
     if (!activeChatId) {
         // Create new chat
