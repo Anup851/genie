@@ -7,6 +7,7 @@ const chatInput = document.querySelector(".chat-input textarea");
 const sendChatBtn = document.querySelector("#send-btn");
 const stopChatBtn = document.querySelector("#stop-btn");
 const chatbox = document.querySelector(".chatbox");
+const chatContainer = document.querySelector(".chat-container");
 const historySidebar = document.querySelector(".history-sidebar");
 const historyList = document.querySelector(".history-list");
 const deleteAllBtn = document.querySelector(".delete-all-btn");
@@ -57,6 +58,15 @@ function revealAppShell() {
   document.body.classList.remove("ui-loading");
   const loader = document.getElementById("app-shell-loader");
   if (loader) loader.setAttribute("hidden", "hidden");
+}
+
+function syncFreshChatLayout() {
+  const hasMessages = !!chatbox?.querySelector(".chat");
+  const isFreshDraft = !activeChatId && !hasMessages;
+  document.body.classList.toggle("fresh-chat-home", isFreshDraft);
+  if (chatContainer) {
+    chatContainer.setAttribute("aria-hidden", String(!isFreshDraft));
+  }
 }
 
 const SUPPORTED_MEDIA_MIME_TYPES = new Set([
@@ -932,7 +942,7 @@ async function apiFetch(url, options = {}) {
 
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
 let conversationMemory = [];
-let activeChatId = localStorage.getItem("genie_activeChatId") || null;
+let activeChatId = null;
 let speechRecognition = null;
 let voices = [];
 let sttSupported = false;
@@ -949,6 +959,13 @@ function isUuidChatId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || ""),
   );
+}
+
+function generateDraftChatId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function requestStopGeneration() {
@@ -1080,8 +1097,8 @@ async function initializeApp() {
   // 5) Backend check
   testBackendConnection().catch(console.error);
 
-  // 6) Ensure chat + sessions are ready on first load
-  await ensureActiveChat();
+  // 6) Load history, but keep the main view as a fresh draft until the user sends or opens a chat
+  await ensureActiveChat({ createIfMissing: false, loadMessages: false });
 
   console.log("âœ… App initialized");
 }
@@ -1108,6 +1125,8 @@ function initUIState() {
     historySidebar.style.display = "";
     historySidebar.style.transform = "";
   }
+
+  syncFreshChatLayout();
 }
 // 3. THEME MANAGEMENT
 function initTheme() {
@@ -1378,14 +1397,30 @@ async function startChat() {
         }
     }
     
-    // Ensure active chat exists
-    await ensureActiveChat();
+    // Keep the composer ready, but don't auto-open any previous chat on load
+    await ensureActiveChat({ createIfMissing: false, loadMessages: false });
     
     // Focus on input
     if (chatInput) chatInput.focus();
 }
 
-async function ensureActiveChat() {
+function resetChatDraftView() {
+    activeChatId = null;
+    localStorage.removeItem("genie_activeChatId");
+    conversationMemory = [];
+    if (chatbox) {
+        chatbox.innerHTML = "";
+        chatbox.scrollTo(0, 0);
+    }
+    syncFreshChatLayout();
+}
+
+async function ensureActiveChat(options = {}) {
+    const {
+        createIfMissing = true,
+        loadMessages = true,
+        refreshSidebar = true,
+    } = options;
     const userId = await getUserId();  // âœ… Added await
     if (!userId) return;
 
@@ -1395,48 +1430,34 @@ async function ensureActiveChat() {
     }
     
     if (!activeChatId) {
-        // Create new chat
-        const resp = await apiFetch(`${BACKEND_URL}/chat/new`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId, title: "New chat" })
-        });
-        
-        if (resp.ok) {
-            const data = await resp.json();
-            activeChatId = data.chatId;
-            localStorage.setItem("genie_activeChatId", activeChatId);
-        } else {
-            console.error("âŒ Failed to create new chat");
-            return;
+        if (!createIfMissing) {
+            resetChatDraftView();
+            if (refreshSidebar) await loadSessionsSidebar();
+            return null;
         }
+
+        // Keep the draft local until the first successful response is saved.
+        activeChatId = generateDraftChatId();
+        localStorage.setItem("genie_activeChatId", activeChatId);
     }
     
-    // Load sidebar sessions
-    await loadSessionsSidebar();
+    if (refreshSidebar) {
+        // Load sidebar sessions
+        await loadSessionsSidebar();
+    }
     
-    // Load chat messages
-    await loadChatFromServer(activeChatId);
+    if (loadMessages) {
+        // Load chat messages
+        await loadChatFromServer(activeChatId);
+    }
+
+    return activeChatId;
 }
 
 async function createNewChat() {
-    const userId = await getUserId();
-    if (!userId) return;
-    
-    try {
-        const resp = await apiFetch(`${BACKEND_URL}/chat/new`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId, title: "New chat" })
-        });
-        
-        if (resp.ok) {
-            const data = await resp.json();
-            await openSession(data.chatId);
-        }
-    } catch (error) {
-        console.error("âŒ Error creating new chat:", error);
-    }
+    resetChatDraftView();
+    await loadSessionsSidebar();
+    if (chatInput) chatInput.focus();
 }
 
 async function openSession(chatId) {
@@ -1444,6 +1465,7 @@ async function openSession(chatId) {
     localStorage.setItem("genie_activeChatId", activeChatId);
     await loadChatFromServer(chatId);
     await loadSessionsSidebar();
+    syncFreshChatLayout();
 }
 
 function closeAllHistoryMenus() {
@@ -1666,6 +1688,7 @@ async function loadChatFromServer(chatId) {
         });
         
         chatbox.scrollTo(0, chatbox.scrollHeight);
+        syncFreshChatLayout();
     } catch (error) {
         console.error("âŒ Error loading chat:", error);
         // Create properly styled error message
@@ -1679,6 +1702,7 @@ async function loadChatFromServer(chatId) {
         chatbox.innerHTML = "";
         chatbox.appendChild(errorLi);
         chatbox.scrollTo(0, chatbox.scrollHeight);
+        syncFreshChatLayout();
     }
 }
 
@@ -1693,9 +1717,8 @@ async function deleteSession(chatId) {
         
         // If deleted current chat, create a new one
         if (chatId === activeChatId) {
-            activeChatId = null;
-            localStorage.removeItem("genie_activeChatId");
-            await ensureActiveChat();
+            resetChatDraftView();
+            await loadSessionsSidebar();
         } else {
             await loadSessionsSidebar();
         }
@@ -1715,9 +1738,8 @@ async function deleteAllChats() {
             method: "DELETE"
         });
         
-        activeChatId = null;
-        localStorage.removeItem("genie_activeChatId");
-        await ensureActiveChat();
+        resetChatDraftView();
+        await loadSessionsSidebar();
     } catch (error) {
         console.error("âŒ Error deleting all chats:", error);
     }
@@ -1775,6 +1797,7 @@ function handleChat() {
         );
         chatbox.appendChild(errorLi);
         chatbox.scrollTo(0, chatbox.scrollHeight);
+        syncFreshChatLayout();
         setComposerBusy(false);
         return;
     }
@@ -1792,6 +1815,7 @@ function handleChat() {
         chatbox.appendChild(createChatLi(userMessage, "outgoing"));
     }
     chatbox.scrollTo(0, chatbox.scrollHeight);
+    syncFreshChatLayout();
     
     // Show typing indicator and generate response
     setTimeout(() => {
@@ -1832,6 +1856,17 @@ async function generateResponse(
   const hasMediaUpload = requestMode === "media";
   const isImageGeneration = requestMode === "image";
   let responseRenderingStarted = false;
+
+  const ensuredChatId = await ensureActiveChat({
+    createIfMissing: true,
+    loadMessages: false,
+    refreshSidebar: true,
+  });
+  if (!ensuredChatId) {
+    messageElement.innerHTML = "Could not start a new chat. Please try again.";
+    setComposerBusy(false);
+    return;
+  }
 
   // Check for special commands
   if (!isImageGeneration && (await handleSpecialCommands(messageElement, userMessage))) {
