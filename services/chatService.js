@@ -1,12 +1,7 @@
 import fetch from "node-fetch";
 
 import { cleanAssistantReply } from "../utils/messageFormatter.js";
-import {
-  buildPromptMessages,
-  getOptimizedChatParams,
-  prepareChatHistory,
-  sanitizePromptEnvelope,
-} from "./promptService.js";
+import { buildChatParams, buildStructuredChatPrompt } from "./promptService.js";
 
 function getISTString() {
   const now = new Date();
@@ -194,8 +189,6 @@ async function getLiveNewsContext(message) {
   if (!wantsNews) {
     return {
       wantsNews: false,
-      articles: [],
-      fetchFailed: false,
       newsContextBlock: "",
     };
   }
@@ -204,19 +197,33 @@ async function getLiveNewsContext(message) {
     const articles = await fetchGdeltArticles(simplifyNewsQuery(sanitizedMessage), 10);
     return {
       wantsNews: true,
-      articles,
-      fetchFailed: false,
       newsContextBlock: buildNewsContextBlock(articles, false),
     };
   } catch (err) {
     console.error("/chat news fetch error:", err);
     return {
       wantsNews: true,
-      articles: [],
-      fetchFailed: true,
       newsContextBlock: buildNewsContextBlock([], true),
     };
   }
+}
+
+function prepareChatHistory(history = []) {
+  const cleanedHistory = Array.isArray(history) ? history : [];
+  if (cleanedHistory.length <= 100) {
+    return { hasDuplicates: false };
+  }
+
+  for (let index = 1; index < cleanedHistory.length; index += 1) {
+    if (
+      cleanedHistory[index].role === cleanedHistory[index - 1].role &&
+      cleanedHistory[index].message === cleanedHistory[index - 1].message
+    ) {
+      return { hasDuplicates: true };
+    }
+  }
+
+  return { hasDuplicates: false };
 }
 
 function buildSessionWarning(historyLength, sessionLimitWarning) {
@@ -237,7 +244,6 @@ function buildSessionWarning(historyLength, sessionLimitWarning) {
   const remaining = sessionLimitWarning - historyLength;
   return {
     limitReached: false,
-    remaining,
     warning: `\n\n---\n⚠️ **Warning:** This chat has ${historyLength} messages. You have **${remaining} messages** left before session limit. Consider starting a new chat.`,
     payload: {
       messageCount: historyLength,
@@ -254,7 +260,6 @@ export function createChatService({
 }) {
   const { maxResponseTokens, sessionLimitWarning } = config;
   const {
-    ensureSession,
     forceCleanChat,
     getChatHistory,
     saveMessage,
@@ -266,22 +271,20 @@ export function createChatService({
     chatId = "default",
     message,
     promptEnvelope,
+    authToken,
     signal,
   }) {
     const sanitizedMessage = String(message || "").trim();
-    const promptMessage = sanitizePromptEnvelope(promptEnvelope, sanitizedMessage);
-    const optimizedParams = getOptimizedChatParams({
-      message: sanitizedMessage,
-      maxResponseTokens,
-    });
+    const promptMessage =
+      typeof promptEnvelope === "string" && promptEnvelope.trim()
+        ? promptEnvelope.trim().slice(0, 40000)
+        : sanitizedMessage;
+
+    const optimizedParams = buildChatParams(sanitizedMessage, maxResponseTokens);
     const nowIST = getISTString();
     const newsContext = await getLiveNewsContext(sanitizedMessage);
 
-    if (chatId !== "default") {
-      await ensureSession(userId, chatId);
-    }
-
-    let history = await getChatHistory(userId, chatId);
+    let history = await getChatHistory(userId, chatId, authToken);
     const sessionWarning = buildSessionWarning(history.length, sessionLimitWarning);
     if (sessionWarning?.limitReached) {
       return {
@@ -291,33 +294,39 @@ export function createChatService({
     }
 
     const isFirstMessage = history.length === 0;
-    const preparedHistory = prepareChatHistory(history);
-    if (preparedHistory?.hasDuplicates) {
-      history = await forceCleanChat(userId, chatId);
+    if (prepareChatHistory(history).hasDuplicates) {
+      history = await forceCleanChat(userId, chatId, authToken);
     }
 
-    const promptMessages = await buildPromptMessages({
+    const promptContext = await buildStructuredChatPrompt({
       history,
       userMessage: promptMessage,
-      optimizedParams,
       nowIST,
       newsContextBlock: newsContext.wantsNews ? newsContext.newsContextBlock : "",
+      optimizedParams,
     });
 
-    const rawReply = await sarvamService.sendChatMessages({
-      messages: promptMessages,
+    const messages = [
+      { role: "system", content: promptContext.systemText },
+      ...promptContext.historyMessages,
+      { role: "user", content: promptContext.userText },
+    ];
+
+    const { reply: rawReply, usage } = await sarvamService.sendChatMessages({
+      messages,
       optimizedParams,
       signal,
     });
+
     const reply = cleanAssistantReply(rawReply);
 
-    await saveMessage(userId, "user", sanitizedMessage, chatId);
-    await saveMessage(userId, "assistant", reply, chatId);
+    await saveMessage(userId, "user", sanitizedMessage, chatId, authToken);
+    await saveMessage(userId, "assistant", reply, chatId, authToken);
 
     if (isFirstMessage) {
-      await touchSession(userId, chatId, sanitizedMessage);
+      await touchSession(userId, chatId, sanitizedMessage, authToken);
     } else {
-      await touchSession(userId, chatId);
+      await touchSession(userId, chatId, null, authToken);
     }
 
     let finalReply = reply;
@@ -329,11 +338,14 @@ export function createChatService({
 
     return {
       reply: finalReply,
+      usage,
       isLarge: reply.length > 5000,
       historyCount: history.length + 2,
       isFirstMessage,
       sessionWarning: warning ? sessionWarning.payload : null,
       sessionLimitExceeded: false,
+      orchestration: "langchain-history-only",
+      provider: "sarvam",
     };
   }
 
