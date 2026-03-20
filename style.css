@@ -654,7 +654,6 @@ body:not(.chat-started) .history-sidebar {
   transition: transform 0.3s ease;
   display: flex;
   flex-direction: column;
-  padding-bottom: 86px;
   /* START HIDDEN ON ALL SCREENS */
   transform: translateX(-100%);
   opacity: 0;
@@ -664,7 +663,7 @@ body:not(.chat-started) .history-sidebar {
 /* Desktop: sidebar visible when chat started */
 @media (min-width: 481px) {
   body.chat-started .history-sidebar {
-    display: block !important;
+    display: flex !important;
     transform: translateX(0) !important;
     opacity: 1 !important;
     visibility: visible !important;
@@ -674,7 +673,7 @@ body:not(.chat-started) .history-sidebar {
 /* Mobile: sidebar hidden initially, shown when active */
 @media (max-width: 480px) {
   body.chat-started .history-sidebar {
-    display: block !important;
+    display: flex !important;
     transform: translateX(-100%) !important;
     opacity: 1 !important;
     visibility: visible !important;
@@ -732,6 +731,7 @@ body:not(.chat-started) .history-sidebar {
   min-height: 0;
   position: relative;
   z-index: 1;
+  padding-bottom: var(--space-md);
 }
 
 .history-list li {
@@ -1860,8 +1860,13 @@ body.light-mode .bot-message-content .inline-code {
 /* ================= HISTORY HEADER ================= */
 .history-actions {
   display: block;
+  flex-shrink: 0;
   padding: 0;
   margin: 0;
+}
+
+.delete-all-btn {
+  flex-shrink: 0;
 }
 
 .new-chat-btn {
@@ -1897,14 +1902,20 @@ body.light-mode .new-chat-btn {
 }
 
 .sidebar-footer {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  padding: 0;
-  background: transparent;
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: 12px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(17, 18, 25, 0) 0%,
+      rgba(17, 18, 25, 0.92) 22%,
+      rgba(17, 18, 25, 1) 100%
+    );
   z-index: 80;
   pointer-events: auto;
+  flex-shrink: 0;
 }
 
 .sidebar-settings-btn {
@@ -1947,8 +1958,14 @@ body.light-mode .new-chat-btn {
 }
 
 body.light-mode .sidebar-footer {
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-  background: transparent;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.92) 22%,
+      rgba(255, 255, 255, 1) 100%
+    );
 }
 
 body.light-mode .sidebar-settings-btn {
@@ -2935,6 +2952,10 @@ body:not(.app-view) .chatbot header #auth-btn {
   position: fixed;
   inset: 0;
   z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
 body.settings-open {
@@ -2951,9 +2972,10 @@ body.settings-open {
 .memory-modal-card {
   position: relative;
   width: min(560px, calc(100vw - 32px));
-  max-height: min(78vh, 720px);
+  min-height: 336px;
+  max-height: min(82vh, 760px);
   overflow: hidden;
-  margin: 8vh auto 0;
+  margin: 0;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(17, 18, 25, 0.96);
@@ -2963,10 +2985,11 @@ body.settings-open {
 }
 
 .settings-overview-grid {
-  padding: 18px 20px 0;
+  padding: 24px 24px 30px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  justify-content: center;
+  gap: 14px;
 }
 
 .settings-stat-card,
@@ -2984,6 +3007,7 @@ body.settings-open {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
   box-shadow: none;
+  justify-self: center;
 }
 
 .settings-theme-btn {
@@ -3106,7 +3130,7 @@ body.settings-open {
 
 .memory-modal-header,
 .memory-modal-actions {
-  padding: 18px 20px;
+  padding: 22px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3234,21 +3258,23 @@ body.light-mode .settings-theme-copy strong {
 }
 
 @media (max-width: 640px) {
-  .memory-modal-card {
-    width: calc(100vw - 12px);
-    margin-top: auto;
-    max-height: min(88vh, 760px);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
   .memory-modal {
-    display: flex;
     align-items: flex-end;
     justify-content: center;
+    padding: 12px;
+  }
+
+  .memory-modal-card {
+    width: min(100%, 520px);
+    margin-top: auto;
+    max-height: min(88vh, 760px);
+    min-height: 0;
+    border-bottom-left-radius: 22px;
+    border-bottom-right-radius: 22px;
   }
 
   .settings-overview-grid {
+    padding: 18px 16px 22px;
     grid-template-columns: 1fr;
   }
 
@@ -3299,6 +3325,18 @@ body.light-mode .settings-theme-copy strong {
     right: 10px;
     bottom: 10px;
   }
+}
+
+body.app-view .memory-modal {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 14px;
+}
+
+body.app-view .memory-modal-card {
+  width: min(100%, 520px);
+  margin-top: auto;
+  min-height: 0;
 }
 
 body.app-view .memory-modal-card .settings-overview-grid > #auth-btn.settings-auth-btn,

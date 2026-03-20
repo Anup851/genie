@@ -235,7 +235,7 @@ function loadMemories() {
 
 function persistMemories() {
   localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(userMemories));
-  renderMemoryList();
+  updateMemorySettingsSummary();
 }
 
 function getMemories() {
@@ -260,49 +260,18 @@ function saveMemory(memory) {
   persistMemories();
 }
 
-function deleteMemory(memoryId) {
-  userMemories = userMemories.filter((item) => item.id !== memoryId);
-  persistMemories();
-}
-
 function clearMemories() {
   userMemories = [];
   persistMemories();
 }
 
 function renderMemoryList() {
-  if (!memoryList) return;
-  const memories = getMemories();
-  updateMemorySettingsSummary(memories);
-  if (!memories.length) {
-    memoryList.innerHTML = `<div class="memory-empty">No saved memory yet. Genie will save simple facts like your name, goal, or preferences.</div>`;
-    return;
-  }
-
-  memoryList.innerHTML = memories
-    .map(
-      (item) => `
-        <div class="memory-item">
-          <div>
-            <strong>${escapeHtml(item.label)}</strong>
-            <p>${escapeHtml(item.value)}</p>
-          </div>
-          <button class="memory-delete-btn material-symbols-outlined" type="button" data-memory-id="${escapeHtml(item.id)}" title="Delete memory">delete</button>
-        </div>
-      `,
-    )
-    .join("");
+  updateMemorySettingsSummary();
 }
 
 function updateMemorySettingsSummary(memories = getMemories()) {
-  const count = Array.isArray(memories) ? memories.length : 0;
-  if (settingsMemoryCount) {
-    settingsMemoryCount.textContent =
-      count === 1 ? "1 saved item" : `${count} saved items`;
-  }
   if (sidebarMemorySummary) {
-    sidebarMemorySummary.textContent =
-      count > 0 ? `${count} memory item${count === 1 ? "" : "s"} saved` : "No memory saved yet";
+    sidebarMemorySummary.textContent = "Theme and account";
   }
   if (settingsThemeLabel) {
     settingsThemeLabel.textContent = document.body.classList.contains("light-mode")
@@ -327,7 +296,7 @@ function updateMemorySettingsSummary(memories = getMemories()) {
 
 function openMemoryModal() {
   if (!memoryModal) return;
-  renderMemoryList();
+  updateMemorySettingsSummary();
   memoryModal.hidden = false;
   document.body.classList.add("settings-open");
 }
@@ -955,9 +924,14 @@ let isRequestInFlight = false;
 let activeRequestController = null;
 let stopGenerationRequested = false;
 
-function isUuidChatId(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(value || ""),
+function isValidChatId(value) {
+  const chatId = String(value || "").trim();
+  if (!chatId) return false;
+
+  return (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      chatId,
+    )
   );
 }
 
@@ -965,7 +939,11 @@ function generateDraftChatId() {
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
   }
-  return `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const rand = Math.floor(Math.random() * 16);
+    const value = char === "x" ? rand : (rand & 0x3) | 0x8;
+    return value.toString(16);
+  });
 }
 
 function requestStopGeneration() {
@@ -1149,13 +1127,6 @@ function initEventListeners() {
         clearMemoryBtn.addEventListener("click", () => {
             clearMemories();
             renderMemoryList();
-        });
-    }
-    if (memoryList) {
-        memoryList.addEventListener("click", (e) => {
-            const btn = e.target.closest("[data-memory-id]");
-            if (!btn) return;
-            deleteMemory(btn.getAttribute("data-memory-id"));
         });
     }
     if (settingsThemeBtn) {
@@ -1424,7 +1395,7 @@ async function ensureActiveChat(options = {}) {
     const userId = await getUserId();  // âœ… Added await
     if (!userId) return;
 
-    if (activeChatId && !isUuidChatId(activeChatId)) {
+    if (activeChatId && !isValidChatId(activeChatId)) {
         activeChatId = null;
         localStorage.removeItem("genie_activeChatId");
     }
