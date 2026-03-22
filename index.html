@@ -5,7 +5,7 @@
 
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' 'unsafe-inline' 'unsafe-eval' *; img-src 'self' data: blob: *; style-src 'self' 'unsafe-inline' *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *;"
+      content="default-src 'self' 'unsafe-inline' 'unsafe-eval' *; img-src 'self' data: blob: *; style-src 'self' 'unsafe-inline' *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *; worker-src 'self' blob: https: data:;"
     />
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -25,7 +25,6 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css"
     />
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
     <script>
       window.pdfjsLibReady = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs")
         .then((pdfjsLib) => {
@@ -82,12 +81,9 @@
 
   <body class="in-app ui-loading">
     <div class="app-shell-loader" id="app-shell-loader" aria-hidden="true">
-      <div class="app-shell-loader__panel">
+      <div class="app-shell-loader__brand">
         <img class="app-shell-loader__logo" src="genie-logo.png" alt="Genie logo" />
-        <div class="app-shell-loader__copy">
-          <strong>Genie is getting ready</strong>
-          <span>Loading chat, memory, and your workspace...</span>
-        </div>
+        <strong class="app-shell-loader__title">Genie</strong>
       </div>
     </div>
     <!-- <div class="welcome">
@@ -197,6 +193,53 @@
             <p class="chat-home-subtitle">
               Ask, code, learn, and generate with Genie.
             </p>
+            <div class="chat-home-prompts" aria-label="Suggested prompts">
+              <button
+                class="chat-home-prompt"
+                type="button"
+                data-group="summarize"
+              >
+                <span class="chat-home-prompt__icon material-symbols-outlined">article</span>
+                <span class="chat-home-prompt__copy">
+                  <span class="chat-home-prompt__title">Summarize</span>
+                  <span class="chat-home-prompt__desc">Turn long content into quick notes.</span>
+                </span>
+              </button>
+              <button
+                class="chat-home-prompt"
+                type="button"
+                data-group="code"
+              >
+                <span class="chat-home-prompt__icon material-symbols-outlined">code</span>
+                <span class="chat-home-prompt__copy">
+                  <span class="chat-home-prompt__title">Code</span>
+                  <span class="chat-home-prompt__desc">Generate practical code with explanation.</span>
+                </span>
+              </button>
+              <button
+                class="chat-home-prompt"
+                type="button"
+                data-group="brainstorm"
+              >
+                <span class="chat-home-prompt__icon material-symbols-outlined">emoji_objects</span>
+                <span class="chat-home-prompt__copy">
+                  <span class="chat-home-prompt__title">Brainstorm</span>
+                  <span class="chat-home-prompt__desc">Get fast suggestions to start from.</span>
+                </span>
+              </button>
+              <button
+                class="chat-home-prompt"
+                type="button"
+                data-group="plan"
+              >
+                <span class="chat-home-prompt__icon material-symbols-outlined">route</span>
+                <span class="chat-home-prompt__copy">
+                  <span class="chat-home-prompt__title">Make a plan</span>
+                  <span class="chat-home-prompt__desc">Break work into clear next steps.</span>
+                </span>
+              </button>
+            </div>
+            <div class="chat-home-options" id="chat-home-options" hidden></div>
           </div>
         </div>
 

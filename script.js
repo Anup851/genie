@@ -26,6 +26,7 @@ const sidebarMemorySummary = document.getElementById("sidebar-memory-summary");
 const imageUploadInput = document.getElementById("image-upload");
 const imageUploadLabel = document.querySelector('label[for="image-upload"]');
 const selectedMediaPreview = document.getElementById("selected-media-preview");
+const chatHomeOptions = document.getElementById("chat-home-options");
 const memoryModal = document.getElementById("memory-modal");
 const memoryList = document.getElementById("memory-list");
 const closeMemoryBtn = document.getElementById("close-memory-btn");
@@ -46,6 +47,7 @@ let pendingMediaSelected = false;
 let pendingMediaLoading = false;
 let imageModeEnabled = false;
 let pendingDocumentContext = null;
+const MAX_VISIBLE_PROMPT_OPTIONS = 4;
 const MEMORY_STORAGE_KEY = "genie_user_memories_v1";
 const DOCUMENT_STORAGE_KEY = "genie_active_document_v1";
 const DOCUMENT_MAX_CHUNKS = 5;
@@ -53,11 +55,84 @@ const DOCUMENT_CHUNK_SIZE = 1200;
 const DOCUMENT_CHUNK_OVERLAP = 180;
 let userMemories = [];
 let activeDocumentContext = null;
+let activePromptGroup = "";
+
+const SUGGESTED_PROMPT_GROUPS = {
+  summarize: [
+    { prompt: "Summarize this article in simple bullet points and include the main conclusion." },
+    { prompt: "Turn this meeting text into clean notes with action items and next steps." },
+    { prompt: "Give me a short summary of this text in 5 clear lines." },
+    { prompt: "Summarize this PDF chapter and list the most important concepts." },
+    { prompt: "Read this long message and give me a crisp executive summary." },
+    { prompt: "Summarize this YouTube transcript into clear sections and key takeaways." },
+    { prompt: "Convert these rough notes into a concise summary with headings." },
+    { prompt: "Summarize this research topic in simple language for a beginner." },
+  ],
+  code: [
+    { prompt: "Write code for FCFS scheduling and explain how it works step by step." },
+    { prompt: "Write code for the 2 Sum problem and explain the approach clearly." },
+    { prompt: "Write code for a simple todo list app and explain the file structure." },
+    { prompt: "Build a responsive login form with HTML, CSS, and JavaScript." },
+    { prompt: "Write a Python script to rename files in a folder safely." },
+    { prompt: "Create a REST API example with Node.js and Express." },
+    { prompt: "Write a binary search implementation and explain time complexity." },
+    { prompt: "Build a small calculator app and explain the logic clearly." },
+  ],
+  brainstorm: [
+    { prompt: "Give me 5 practical app ideas with short descriptions." },
+    { prompt: "Brainstorm content ideas for my topic and make them engaging." },
+    { prompt: "Give me startup ideas I can build with a small team." },
+    { prompt: "Brainstorm YouTube video ideas for a tech-focused channel." },
+    { prompt: "Suggest portfolio project ideas that look strong for interviews." },
+    { prompt: "Give me unique feature ideas for an AI chatbot app." },
+    { prompt: "Brainstorm Instagram reel ideas that feel fresh and shareable." },
+    { prompt: "Suggest SaaS ideas with real user pain points to solve." },
+  ],
+  plan: [
+    { prompt: "Make a step-by-step plan to build this project from scratch." },
+    { prompt: "Create a 7-day study plan for this topic with daily goals." },
+    { prompt: "Make a launch plan for my app with priorities and timeline." },
+    { prompt: "Break this big task into small clear action items." },
+    { prompt: "Create a roadmap for learning web development in order." },
+    { prompt: "Make a content plan for the next 30 days on this topic." },
+    { prompt: "Plan this feature implementation with milestones and risks." },
+    { prompt: "Create a revision plan for exams with subjects and schedule." },
+  ],
+};
+
+const PROMPT_GROUP_ICONS = {
+  summarize: "article",
+  code: "code",
+  brainstorm: "emoji_objects",
+  plan: "route",
+};
+
+function shuffleArray(items = []) {
+  const list = [...items];
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
 
 function revealAppShell() {
   document.body.classList.remove("ui-loading");
   const loader = document.getElementById("app-shell-loader");
   if (loader) loader.setAttribute("hidden", "hidden");
+}
+
+function scrollChatToBottom(force = false) {
+  if (!chatbox) return;
+  const distanceFromBottom =
+    chatbox.scrollHeight - chatbox.scrollTop - chatbox.clientHeight;
+  if (!force && distanceFromBottom > 140) return;
+
+  chatbox.scrollTop = chatbox.scrollHeight;
+  requestAnimationFrame(() => {
+    if (!chatbox) return;
+    chatbox.scrollTop = chatbox.scrollHeight;
+  });
 }
 
 function syncFreshChatLayout() {
@@ -499,7 +574,10 @@ async function extractPdfText(file) {
   }
 
   const buffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pdf = await pdfjsLib.getDocument({
+    data: buffer,
+    disableWorker: true,
+  }).promise;
   const pageTexts = [];
 
   for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
@@ -1791,13 +1869,13 @@ function handleChat() {
     // Show typing indicator and generate response
     setTimeout(() => {
         const typingLi = showTypingIndicator();
-        const requestMode = shouldUseLocalDocumentChat
-          ? "chat"
-          : hasMediaPayload
+        const requestMode = hasMediaPayload
           ? "media"
-          : shouldGenerateImage
-            ? "image"
-            : "chat";
+          : shouldUseLocalDocumentChat
+            ? "chat"
+            : shouldGenerateImage
+              ? "image"
+              : "chat";
         console.log(`[GENIE] Client requestMode=${requestMode} mediaWasSelected=${mediaWasSelected}`);
         generateResponse(
           typingLi,
@@ -2119,6 +2197,7 @@ function renderAssistantMessage(contentElement, messageText) {
         box.textContent = text;
         contentElement.innerHTML = "";
         contentElement.appendChild(box);
+        scrollChatToBottom(true);
         return;
     }
     if (isGeneratedImageReplyText(text)) {
@@ -2128,9 +2207,11 @@ function renderAssistantMessage(contentElement, messageText) {
             imageUrl,
             prompt: promptMatch?.[1] || "Generated image",
         });
+        scrollChatToBottom(true);
         return;
     }
     contentElement.innerHTML = parseFencedBlocks(text);
+    scrollChatToBottom(true);
 }
 
 async function renderTypedBoxReply(messageElement, text) {
@@ -2138,18 +2219,22 @@ async function renderTypedBoxReply(messageElement, text) {
     box.className = "weather-reply-box";
     messageElement.innerHTML = "";
     messageElement.appendChild(box);
+    scrollChatToBottom(true);
 
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     if (reducedMotion) {
         box.textContent = String(text || "");
+        scrollChatToBottom(true);
         return;
     }
 
     box.textContent = "";
     for (const ch of String(text || "")) {
         box.textContent += ch;
+        scrollChatToBottom(true);
         await new Promise((resolve) => setTimeout(resolve, 12));
     }
+    scrollChatToBottom(true);
 }
 
 async function fetchWeather(city) {
@@ -2212,7 +2297,7 @@ function createChatLi(message, className) {
     chatLi.classList.add("chat", className);
     
     if (className === "outgoing") {
-        chatLi.innerHTML = `<p>${escapeHtml(message)}</p>`;
+        chatLi.innerHTML = `<p class="outgoing-message">${escapeHtml(message)}</p>`;
     } else {
         const container = document.createElement("div");
         container.className = "bot-message-container";
@@ -2571,6 +2656,47 @@ function appendFinalTranscript(text) {
     chatInput.style.height = "44px";
     chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
     chatInput.focus();
+}
+
+function applySuggestedPrompt(promptText) {
+    if (!chatInput) return;
+    const prompt = String(promptText || "").trim();
+    if (!prompt) return;
+
+    chatInput.value = prompt;
+    chatInput.style.height = "44px";
+    chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
+    chatInput.focus();
+}
+
+function renderPromptOptions(groupName = "") {
+    if (!chatHomeOptions) return;
+
+    activePromptGroup = String(groupName || "").trim();
+    const options = shuffleArray(SUGGESTED_PROMPT_GROUPS[activePromptGroup] || [])
+      .slice(0, MAX_VISIBLE_PROMPT_OPTIONS);
+    document.body.classList.toggle("prompt-options-open", options.length > 0);
+
+    document.querySelectorAll(".chat-home-prompt").forEach((button) => {
+        button.classList.toggle("active", button.dataset.group === activePromptGroup);
+    });
+
+    chatHomeOptions.innerHTML = "";
+    chatHomeOptions.hidden = options.length === 0;
+    if (!options.length) return;
+
+    options.forEach((option) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chat-home-option";
+        button.dataset.group = activePromptGroup;
+        button.dataset.prompt = option.prompt;
+        button.innerHTML = `
+          <span class="chat-home-option__icon material-symbols-outlined">${PROMPT_GROUP_ICONS[activePromptGroup] || "article"}</span>
+          <span class="chat-home-option__text">${option.prompt}</span>
+        `;
+        chatHomeOptions.appendChild(button);
+    });
 }
 
 async function syncMicAuthState() {
@@ -2949,6 +3075,19 @@ document.addEventListener("click", function(e) {
     console.log("ðŸ”„ Sidebar state changed, re-setting up close button...");
     setTimeout(setupWebViewCloseButton, 300);
   }
+});
+
+document.addEventListener("click", function(e) {
+  const promptBtn = e.target.closest(".chat-home-prompt");
+  if (promptBtn) {
+    const group = promptBtn.dataset.group || "";
+    renderPromptOptions(activePromptGroup === group ? "" : group);
+    return;
+  }
+
+  const optionBtn = e.target.closest(".chat-home-option");
+  if (!optionBtn) return;
+  applySuggestedPrompt(optionBtn.dataset.prompt || "");
 });
 
 // ---- Typing simulation helpers ----
