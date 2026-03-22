@@ -1737,7 +1737,7 @@ function renderSessionsSidebar(sessions = []) {
         if (session.chatId === activeChatId) li.classList.add("active");
 
         li.innerHTML = `
-            <span class="history-title">${escapeHtml(session.title || "New chat")}</span>
+            <span class="history-title"><span class="history-title__text">${escapeHtml(session.title || "New chat")}</span></span>
             <button class="history-actions-btn material-symbols-outlined" type="button" title="More">more_horiz</button>
             <div class="history-item-actions-menu">
               <button type="button" class="history-menu-item edit-item">
