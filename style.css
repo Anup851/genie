@@ -983,7 +983,7 @@ body:not(.chat-started) .history-sidebar {
 }
 
 .history-list li {
-  padding: var(--space-sm);
+  padding: 10px 12px;
   background-color: var(--card-bg);
   color: var(--text-primary);
   border-radius: var(--radius-md);
@@ -992,11 +992,40 @@ body:not(.chat-started) .history-sidebar {
   cursor: pointer;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
+  height: 56px;
+  min-height: 56px;
+  max-height: 56px;
+  box-sizing: border-box;
   position: relative;
   z-index: 1;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all var(--transition-fast);
+  overflow: hidden;
+}
+
+.history-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  height: 100%;
+}
+
+.history-title__text {
+  display: -webkit-box;
+  max-width: 100%;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .history-list .history-list-spacer {
