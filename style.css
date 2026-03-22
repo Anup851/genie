@@ -722,6 +722,7 @@ body.chat-started .chatbot {
   display: flex;
   flex-direction: column;
   max-width: 80%;
+  min-width: 0;
   background: transparent;
   padding: 0;
   margin: 0;
@@ -2002,8 +2003,10 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
   color: white;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   line-height: 1.65;
   font-size: 15px;
+  overflow-x: hidden;
 }
 
 .bot-message-content > *:first-child {
@@ -2068,13 +2071,18 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
 .bot-message-content .code-block {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin: 10px 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .bot-message-content .code-block pre {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -2084,6 +2092,8 @@ body.light-mode .chat.incoming .msg-actions .speak-btn {
 
 .bot-message-content .code-block code {
   display: block;
+  width: max-content;
+  min-width: 100%;
   white-space: pre;
 }
 
