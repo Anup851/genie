@@ -1,4 +1,4 @@
-﻿
+
 
 // ================= DOM ELEMENTS =================
 const chatbotToggler = document.querySelector(".chatbot-toggler");
@@ -585,6 +585,22 @@ function shouldUseRecentConversation(question) {
     /\babove\b/,
     /\blast\b/,
   ].some((pattern) => pattern.test(normalized));
+}
+
+function isCodingRequest(message = "") {
+  const text = String(message || "").trim().toLowerCase();
+  if (!text) return false;
+  const patterns = [
+    /```/,
+    /\b(html|css|javascript|js|jsx|typescript|ts|python|java|c\+\+|cpp|react|node|express)\b/,
+    /\b(code|coding|script|snippet|program|algorithm|app|project|component|function|calculator|todo)\b/,
+    /\b(index\.html|styles?\.css|script\.js|app\.js|main\.js|main\.py)\b/,
+    /\b(full|complete|entire|again|rewrite|regenerate|continue|rest of)\b.*\b(code|html|css|js|javascript|file|files)\b/,
+    /\b(split|separate)\b.*\b(file|files)\b/,
+    /\bgive\s+(me\s+)?(the\s+)?(html|css|js|javascript|code)\b/,
+    /\bsend\s+(me\s+)?(the\s+)?(html|css|js|javascript|code)\b/,
+  ];
+  return patterns.some((pattern) => pattern.test(text));
 }
 
 function buildPrompt({ question, recentMessages, documentContext, memoryText }) {
@@ -2126,6 +2142,7 @@ async function generateResponse(
           message: userMessage.trim(),
           promptEnvelope: promptPayload.message,
           clientContextMeta: {
+            forceCodeMode: isCodingRequest(userMessage),
             usedMemory: promptPayload.usedMemory,
             usedDocument: promptPayload.usedDocument,
             activeDocumentName: activeDocumentContext?.name || "",
@@ -2529,8 +2546,99 @@ function normalizeInlineCodeArtifacts(text) {
       .trim();
 }
 
+function getCodeLanguageFromFilename(filename = "") {
+  const ext = String(filename || "").trim().split(".").pop()?.toLowerCase() || "";
+  const map = {
+    html: "html",
+    htm: "html",
+    css: "css",
+    js: "javascript",
+    jsx: "jsx",
+    ts: "typescript",
+    tsx: "tsx",
+    json: "json",
+    md: "markdown",
+    py: "python",
+    java: "java",
+    c: "c",
+    cpp: "cpp",
+    cs: "csharp",
+    php: "php",
+    rb: "ruby",
+    go: "go",
+    sql: "sql",
+  };
+  return map[ext] || "text";
+}
+
+function matchFileSectionHeading(line = "") {
+  const trimmed = String(line || "").trim();
+  return (
+    trimmed.match(/^(\d+)\.\s+([A-Za-z0-9_./-]+\.(html?|css|js|jsx|ts|tsx|json|md|py|java|c|cpp|cs|php|rb|go|sql))$/i) ||
+    trimmed.match(/^([A-Za-z0-9_./-]+\.(html?|css|js|jsx|ts|tsx|json|md|py|java|c|cpp|cs|php|rb|go|sql))(?:\s*\([^)]*\))?:$/i)
+  );
+}
+
+function isLikelyCodeLine(line = "") {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return false;
+  return /^(<!DOCTYPE|<html|<head|<body|<\/?[a-z][^>]*>|[.#]?[A-Za-z0-9_-]+\s*\{|@media\b|:root\b|const\b|let\b|var\b|function\b|import\b|export\b|if\s*\(|for\s*\(|while\s*\(|return\b|document\.|window\.|body\s*\{|button\s*\{|input\s*\{|div\s*\{|\.|#)/i.test(trimmed);
+}
+
+function convertStructuredFileSections(text) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  const output = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const headingMatch = matchFileSectionHeading(lines[i]);
+    if (!headingMatch) {
+      output.push(lines[i]);
+      continue;
+    }
+
+    const filename = headingMatch[2] || headingMatch[1];
+    let cursor = i + 1;
+    let sawCopyLine = false;
+
+    if (String(lines[cursor] || "").trim().toLowerCase() === "copy") {
+      sawCopyLine = true;
+      cursor += 1;
+    }
+
+    while (cursor < lines.length && !String(lines[cursor] || "").trim()) {
+      cursor += 1;
+    }
+
+    if (!sawCopyLine && !isLikelyCodeLine(lines[cursor] || "")) {
+      output.push(lines[i]);
+      continue;
+    }
+
+    const codeLines = [];
+    let end = cursor;
+    for (; end < lines.length; end++) {
+      const nextHeading = matchFileSectionHeading(lines[end]);
+      if (nextHeading) break;
+      codeLines.push(lines[end]);
+    }
+
+    while (codeLines.length && !String(codeLines[codeLines.length - 1] || "").trim()) {
+      codeLines.pop();
+    }
+
+    output.push(`### ${filename}`);
+    output.push("```" + getCodeLanguageFromFilename(filename));
+    output.push(codeLines.join("\n"));
+    output.push("```");
+
+    i = end - 1;
+  }
+
+  return output.join("\n");
+}
+
 function parseFencedBlocks(text) {
-    const source = normalizeInlineCodeArtifacts(text).replace(/\r\n/g, "\n");
+    const source = convertStructuredFileSections(normalizeInlineCodeArtifacts(text)).replace(/\r\n/g, "\n");
     const codeBlocks = [];
     const withPlaceholders = source.replace(
       /```([\w#+-]+)?\n([\s\S]*?)```/g,
