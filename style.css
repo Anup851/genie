@@ -3954,3 +3954,37 @@ body.app-view .delete-all-btn {
     align-self: center !important;
   }
 }
+
+/* App-only safe area: keep phone status bar separate from the app header */
+body.app-view {
+  --app-safe-top: max(24px, env(safe-area-inset-top, 0px));
+}
+
+body.app-view::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--app-safe-top);
+  background: #000000;
+  z-index: 1005;
+  pointer-events: none;
+}
+
+body.app-view .history-sidebar,
+body.app-view .chatbot {
+  box-sizing: border-box;
+  padding-top: var(--app-safe-top) !important;
+}
+
+body.app-view .chatbot header.chat-header,
+body.app-view .history-actions {
+  min-height: 56px !important;
+}
+
+@media (max-width: 480px) {
+  body.app-view {
+    --app-safe-top: max(28px, env(safe-area-inset-top, 0px));
+  }
+}
