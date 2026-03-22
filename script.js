@@ -135,6 +135,36 @@ function scrollChatToBottom(force = false) {
   });
 }
 
+function scheduleChatScroll(force = false) {
+  if (force) {
+    if (pendingChatScrollFrame) {
+      cancelAnimationFrame(pendingChatScrollFrame);
+      pendingChatScrollFrame = 0;
+    }
+    scrollChatToBottom(true);
+    return;
+  }
+
+  if (pendingChatScrollFrame) return;
+  pendingChatScrollFrame = requestAnimationFrame(() => {
+    pendingChatScrollFrame = 0;
+    scrollChatToBottom(true);
+  });
+}
+
+function shouldRenderTypingFrame(index, total, ch = "", chunkSize = 8) {
+  return (
+    index === total - 1 ||
+    index % chunkSize === 0 ||
+    ch === "\n" ||
+    ch === "." ||
+    ch === "!" ||
+    ch === "?" ||
+    ch === "," ||
+    ch === ";"
+  );
+}
+
 function syncFreshChatLayout() {
   const hasMessages = !!chatbox?.querySelector(".chat");
   const isFreshDraft = !activeChatId && !hasMessages;
@@ -402,6 +432,17 @@ function normalizeTextForSearch(text) {
 function extractUserMemories(message) {
   const text = String(message || "").trim();
   if (!text) return [];
+  const lower = text.toLowerCase();
+  const shouldStoreMemory = [
+    "my name is",
+    "i am learning",
+    "i want a job in",
+    "i prefer",
+    "call me",
+    "remember that",
+  ].some((phrase) => lower.includes(phrase));
+  if (!shouldStoreMemory) return [];
+
   const extracted = [];
   const patterns = [
     {
@@ -477,6 +518,36 @@ function scoreChunk(query, chunk) {
   return score;
 }
 
+function isMemoryRelevant(question, memories = getMemories()) {
+  if (!Array.isArray(memories) || !memories.length) return false;
+  const normalizedQuestion = normalizeTextForSearch(question);
+  if (!normalizedQuestion) return false;
+
+  const directNeedPatterns = [
+    /\bmy\b/,
+    /\bme\b/,
+    /\bi\b/,
+    /\bremember\b/,
+    /\bpreference\b/,
+    /\bprefer\b/,
+    /\blearning\b/,
+    /\bjob\b/,
+    /\bname\b/,
+  ];
+  if (directNeedPatterns.some((pattern) => pattern.test(normalizedQuestion))) return true;
+
+  return memories.some((memory) => {
+    const key = normalizeTextForSearch(memory.key);
+    const label = normalizeTextForSearch(memory.label);
+    const value = normalizeTextForSearch(memory.value);
+    return (
+      (key && normalizedQuestion.includes(key)) ||
+      (label && normalizedQuestion.includes(label)) ||
+      (value && normalizedQuestion.includes(value))
+    );
+  });
+}
+
 function getRelevantChunks(question, chunks, maxChunks = DOCUMENT_MAX_CHUNKS) {
   return (Array.isArray(chunks) ? chunks : [])
     .map((chunk, index) => ({ chunk, index, score: scoreChunk(question, chunk) }))
@@ -498,6 +569,22 @@ function formatUserMemories() {
   const memories = getMemories();
   if (!memories.length) return "No saved memory.";
   return memories.map((item) => `- ${item.label}: ${item.value}`).join("\n");
+}
+
+function shouldUseRecentConversation(question) {
+  const normalized = normalizeTextForSearch(question);
+  if (!normalized || conversationMemory.length < 2) return false;
+  return [
+    /\bthis\b/,
+    /\bthat\b/,
+    /\bit\b/,
+    /\bagain\b/,
+    /\bprevious\b/,
+    /\bearlier\b/,
+    /\bcontinue\b/,
+    /\babove\b/,
+    /\blast\b/,
+  ].some((pattern) => pattern.test(normalized));
 }
 
 function buildPrompt({ question, recentMessages, documentContext, memoryText }) {
@@ -638,20 +725,25 @@ async function handleDocumentUpload(file) {
 function buildDocumentContext(question) {
   if (!activeDocumentContext?.chunks?.length) return "";
   const matches = getRelevantChunks(question, activeDocumentContext.chunks);
-  const chunksToUse = matches.length ? matches : activeDocumentContext.chunks.slice(0, 2);
+  if (!matches.length) return "";
+
+  const chunksToUse = matches.slice(0, Math.min(matches.length, 3));
   return chunksToUse
     .map((chunk, index) => `[Chunk ${index + 1}]\n${chunk}`)
     .join("\n\n");
 }
 
 function getStructuredPromptForQuestion(question) {
-  const memoryText = formatUserMemories();
+  const shouldUseMemory = isMemoryRelevant(question);
+  const memoryText = shouldUseMemory ? formatUserMemories() : "No saved memory.";
   const documentContext = buildDocumentContext(question);
-  const recentMessages = formatRecentConversation();
+  const recentMessages = shouldUseRecentConversation(question)
+    ? formatRecentConversation()
+    : "No recent chat.";
   const shouldWrap =
     memoryText !== "No saved memory." ||
     !!documentContext ||
-    conversationMemory.length > 0;
+    recentMessages !== "No recent chat.";
 
   if (!shouldWrap) {
     return {
@@ -1001,6 +1093,9 @@ const STT_AUTO_SEND_PAUSE_MS = 1200;
 let isRequestInFlight = false;
 let activeRequestController = null;
 let stopGenerationRequested = false;
+let pendingChatScrollFrame = 0;
+let sessionsSidebarLoadPromise = null;
+let lastSessionsSidebarSnapshot = "";
 
 function isValidChatId(value) {
   const chatId = String(value || "").trim();
@@ -1607,96 +1702,116 @@ function beginInlineRename(li, session) {
     });
 }
 
-async function loadSessionsSidebar() {
-    const userId = await getUserId();
-    if (!userId) return;
-    
-    try {
-        const resp = await apiFetch(`${BACKEND_URL}/chats/${userId}`);
-        if (!resp.ok) throw new Error("Failed to load sessions");
-        
-        const data = await resp.json();
-        const sessions = data.sessions || [];
-        
-        historyList.innerHTML = "";
-        
-        if (sessions.length === 0) {
-            // Create styled "no chats" message
-            const noChatsLi = document.createElement("li");
-            noChatsLi.className = "no-chats";
-            noChatsLi.textContent = "No chats yet";
-            historyList.appendChild(noChatsLi);
-            return;
-        }
-        
-        sessions.forEach(session => {
-            const li = document.createElement("li");
-            li.className = "history-item";
-            if (session.chatId === activeChatId) li.classList.add("active");
-            
-            li.innerHTML = `
-                <span class="history-title">${escapeHtml(session.title || "New chat")}</span>
-                <button class="history-actions-btn material-symbols-outlined" type="button" title="More">more_horiz</button>
-                <div class="history-item-actions-menu">
-                  <button type="button" class="history-menu-item edit-item">
-                    <span class="material-symbols-outlined">edit</span>
-                    <span>Edit</span>
-                  </button>
-                  <button type="button" class="history-menu-item delete-item">
-                    <span class="material-symbols-outlined">delete</span>
-                    <span>Delete</span>
-                  </button>
-                </div>
-            `;
-            
-            // Open chat on click
-            li.addEventListener("click", (e) => {
-                if (e.target.closest(".history-actions-btn") || e.target.closest(".history-item-actions-menu")) return;
-                openSession(session.chatId);
-            });
+function renderSessionsSidebar(sessions = []) {
+    if (!historyList) return;
 
-            const actionsBtn = li.querySelector(".history-actions-btn");
-            const menu = li.querySelector(".history-item-actions-menu");
-            actionsBtn?.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const isOpen = menu.classList.contains("open");
-                closeAllHistoryMenus();
-                if (!isOpen) {
-                    menu.classList.add("open");
-                    li.classList.add("menu-open");
-                    requestAnimationFrame(() => positionHistoryMenu(li, menu));
-                }
-            });
+    historyList.innerHTML = "";
 
-            li.querySelector(".edit-item")?.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                closeAllHistoryMenus();
-                beginInlineRename(li, session);
-            });
+    if (sessions.length === 0) {
+        const noChatsLi = document.createElement("li");
+        noChatsLi.className = "no-chats";
+        noChatsLi.textContent = "No chats yet";
+        historyList.appendChild(noChatsLi);
+        return;
+    }
 
-            li.querySelector(".delete-item")?.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                closeAllHistoryMenus();
-                await deleteSession(session.chatId);
-            });
-            
-            historyList.appendChild(li);
+    sessions.forEach(session => {
+        const li = document.createElement("li");
+        li.className = "history-item";
+        if (session.chatId === activeChatId) li.classList.add("active");
+
+        li.innerHTML = `
+            <span class="history-title">${escapeHtml(session.title || "New chat")}</span>
+            <button class="history-actions-btn material-symbols-outlined" type="button" title="More">more_horiz</button>
+            <div class="history-item-actions-menu">
+              <button type="button" class="history-menu-item edit-item">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Edit</span>
+              </button>
+              <button type="button" class="history-menu-item delete-item">
+                <span class="material-symbols-outlined">delete</span>
+                <span>Delete</span>
+              </button>
+            </div>
+        `;
+
+        li.addEventListener("click", (e) => {
+            if (e.target.closest(".history-actions-btn") || e.target.closest(".history-item-actions-menu")) return;
+            openSession(session.chatId);
         });
 
-        // Keep an invisible spacer at the end so last-item menus never get clipped.
-        const spacer = document.createElement("li");
-        spacer.className = "history-list-spacer";
-        spacer.setAttribute("aria-hidden", "true");
-        historyList.appendChild(spacer);
-    } catch (error) {
-        console.error("âŒ Error loading sessions:", error);
-        // Create styled error message
-        const errorLi = document.createElement("li");
-        errorLi.className = "error";
-        errorLi.textContent = "Failed to load chats";
-        historyList.innerHTML = "";
-        historyList.appendChild(errorLi);
-    }
+        const actionsBtn = li.querySelector(".history-actions-btn");
+        const menu = li.querySelector(".history-item-actions-menu");
+        actionsBtn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = menu.classList.contains("open");
+            closeAllHistoryMenus();
+            if (!isOpen) {
+                menu.classList.add("open");
+                li.classList.add("menu-open");
+                requestAnimationFrame(() => positionHistoryMenu(li, menu));
+            }
+        });
+
+        li.querySelector(".edit-item")?.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            closeAllHistoryMenus();
+            beginInlineRename(li, session);
+        });
+
+        li.querySelector(".delete-item")?.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            closeAllHistoryMenus();
+            await deleteSession(session.chatId);
+        });
+
+        historyList.appendChild(li);
+    });
+
+    const spacer = document.createElement("li");
+    spacer.className = "history-list-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    historyList.appendChild(spacer);
+}
+
+async function loadSessionsSidebar(force = false) {
+    if (sessionsSidebarLoadPromise && !force) return sessionsSidebarLoadPromise;
+
+    sessionsSidebarLoadPromise = (async () => {
+        const userId = await getUserId();
+        if (!userId) return;
+
+        try {
+            const resp = await apiFetch(`${BACKEND_URL}/chats/${userId}`);
+            if (!resp.ok) throw new Error("Failed to load sessions");
+
+            const data = await resp.json();
+            const sessions = data.sessions || [];
+            const snapshot = JSON.stringify(
+                sessions.map((session) => ({
+                    chatId: session.chatId,
+                    title: session.title || "New chat",
+                    active: session.chatId === activeChatId,
+                }))
+            );
+
+            if (!force && snapshot === lastSessionsSidebarSnapshot) return;
+
+            lastSessionsSidebarSnapshot = snapshot;
+            renderSessionsSidebar(sessions);
+        } catch (error) {
+            console.error("âŒ Error loading sessions:", error);
+            const errorLi = document.createElement("li");
+            errorLi.className = "error";
+            errorLi.textContent = "Failed to load chats";
+            historyList.innerHTML = "";
+            historyList.appendChild(errorLi);
+        } finally {
+            sessionsSidebarLoadPromise = null;
+        }
+    })();
+
+    return sessionsSidebarLoadPromise;
 }
 
 document.addEventListener("click", (e) => {
@@ -3118,8 +3233,7 @@ function typeCharsInto(el, text, baseSpeed = 10, mode = "html") {
         el.textContent += ch;
       }
 
-      const chatbox = document.querySelector(".chatbox");
-      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+      scheduleChatScroll();
 
       let delay = baseSpeed;
       if (ch === "\n") delay = 25;
@@ -3145,17 +3259,17 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
   async function typePlainText(target, text) {
     const raw = String(text || "");
     let buffer = "";
+    const chunkSize = raw.length > 1800 ? 18 : raw.length > 900 ? 12 : 8;
     for (let i = 0; i < raw.length; i++) {
       throwIfGenerationStopped();
       const ch = raw[i];
       buffer += ch;
 
-      if (i % 2 === 0 || i === raw.length - 1) {
+      if (shouldRenderTypingFrame(i, raw.length, ch, chunkSize)) {
         target.innerHTML = parseFencedBlocks(buffer);
       }
 
-      const chatbox = document.querySelector(".chatbox");
-      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+      scheduleChatScroll();
 
       let delay = textSpeed;
       if (ch === "\n") delay = Math.max(20, textSpeed + 8);
@@ -3173,8 +3287,9 @@ async function typeTextAndCode(element, fullText, textSpeed = 12, codeSpeed = 4)
       throwIfGenerationStopped();
       target.textContent += code[i];
 
-      const chatbox = document.querySelector(".chatbox");
-      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+      if (shouldRenderTypingFrame(i, code.length, code[i], 6)) {
+        scheduleChatScroll();
+      }
 
       await new Promise((r) => setTimeout(r, codeSpeed));
     }
@@ -3238,17 +3353,15 @@ function normalizeCodeLanguage(lang = "text") {
 async function typeRichMarkdown(element, fullText, textSpeed = 12) {
   const text = normalizeInlineCodeArtifacts(fullText);
   let buffer = "";
+  const chunkSize = text.length > 1800 ? 18 : text.length > 900 ? 12 : 8;
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     buffer += ch;
 
-    // Render every 2 chars for smoother animation without heavy reflow.
-    if (i % 2 === 0 || i === text.length - 1) {
+    if (shouldRenderTypingFrame(i, text.length, ch, chunkSize)) {
       element.innerHTML = parseFencedBlocks(buffer);
-      if (window.Prism) Prism.highlightAllUnder(element);
-      const chatbox = document.querySelector(".chatbox");
-      if (chatbox) chatbox.scrollTop = chatbox.scrollHeight;
+      scheduleChatScroll();
     }
 
     let delay = textSpeed;
@@ -3259,6 +3372,8 @@ async function typeRichMarkdown(element, fullText, textSpeed = 12) {
 
     await new Promise((r) => setTimeout(r, delay));
   }
+  if (window.Prism) Prism.highlightAllUnder(element);
+  scheduleChatScroll(true);
 }
 
 const APK_URL =

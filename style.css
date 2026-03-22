@@ -111,6 +111,7 @@ body.ui-loading #sidebar-toggle {
   justify-content: center;
   padding: 24px;
   background: #ffffff;
+  overflow: hidden;
 }
 
 body.ui-loading .app-shell-loader {
@@ -118,26 +119,80 @@ body.ui-loading .app-shell-loader {
 }
 
 .app-shell-loader__brand {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 18px;
+  animation: loaderBrandEnter 0.6s ease both;
 }
 
 .app-shell-loader__logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 0;
   object-fit: cover;
   flex-shrink: 0;
+  animation: loaderLogoFloat 2.2s ease-in-out infinite;
 }
 
 .app-shell-loader__title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   color: #111111;
-  font-size: 28px;
+  font-size: 36px;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.app-shell-loader__title span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: loaderLetterReveal 0.45s ease forwards;
+}
+
+.app-shell-loader__title span:nth-child(1) { animation-delay: 0.08s; }
+.app-shell-loader__title span:nth-child(2) { animation-delay: 0.16s; }
+.app-shell-loader__title span:nth-child(3) { animation-delay: 0.24s; }
+.app-shell-loader__title span:nth-child(4) { animation-delay: 0.32s; }
+.app-shell-loader__title span:nth-child(5) { animation-delay: 0.4s; }
+.app-shell-loader__title span + span {
+  margin-left: 0.02em;
+}
+
+@keyframes loaderBrandEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes loaderLogoFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.02);
+  }
+}
+
+@keyframes loaderLetterReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 640px) {
@@ -150,13 +205,22 @@ body.ui-loading .app-shell-loader {
   }
 
   .app-shell-loader__logo {
-    width: 60px;
-    height: 60px;
-    border-radius: 16px;
+    width: 74px;
+    height: 74px;
   }
 
   .app-shell-loader__title {
-    font-size: 24px;
+    font-size: 29px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-loader__brand,
+  .app-shell-loader__logo,
+  .app-shell-loader__title span {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 
@@ -272,6 +336,7 @@ body:not(.chat-started) #sidebar-toggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  animation: fadeUp 0.42s ease both;
 }
 
 body.prompt-options-open .chat-home-prompts {
@@ -290,7 +355,13 @@ body.prompt-options-open .chat-home-prompts {
   gap: 12px;
   cursor: pointer;
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  animation: fadeUp 0.36s ease both;
 }
+
+.chat-home-prompt:nth-child(1) { animation-delay: 0.02s; }
+.chat-home-prompt:nth-child(2) { animation-delay: 0.06s; }
+.chat-home-prompt:nth-child(3) { animation-delay: 0.1s; }
+.chat-home-prompt:nth-child(4) { animation-delay: 0.14s; }
 
 .chat-home-prompt:hover {
   transform: translateY(-2px);
@@ -364,6 +435,7 @@ body.prompt-options-open .chat-home-prompts {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+  animation: fadeUp 0.28s ease both;
 }
 
 .chat-home-option {
@@ -381,7 +453,13 @@ body.prompt-options-open .chat-home-prompts {
   line-height: 1.45;
   cursor: pointer;
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  animation: fadeUp 0.28s ease both;
 }
+
+.chat-home-option:nth-child(1) { animation-delay: 0.02s; }
+.chat-home-option:nth-child(2) { animation-delay: 0.05s; }
+.chat-home-option:nth-child(3) { animation-delay: 0.08s; }
+.chat-home-option:nth-child(4) { animation-delay: 0.11s; }
 
 .chat-home-option:hover {
   transform: translateY(-2px);
@@ -516,6 +594,7 @@ body.chat-started .chatbot {
   display: flex;
   list-style: none;
   margin: var(--space-sm) 0;
+  animation: messageSlideIn 0.22s ease both;
 }
 
 .chatbox .outgoing {
@@ -3045,6 +3124,39 @@ body.app-view.light-mode .chatbox .outgoing .outgoing-message {
   word-break: break-word !important;
 }
 
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-home-prompts,
+  .chat-home-prompt,
+  .chat-home-options,
+  .chat-home-option,
+  .chatbox .chat {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 
 /* ================= DESKTOP NORMAL MODE: AUTH LEFT OF MODE TOGGLE ================= */
 @media (min-width: 481px) {
@@ -3572,4 +3684,127 @@ body.app-view .settings-stat-card {
   width: 100% !important;
   max-width: none !important;
   aspect-ratio: auto !important;
+}
+
+/* ================= HEADER OVERLAP SAFETY ================= */
+@media (max-width: 820px) {
+  .chat-header {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    height: auto !important;
+    min-height: 64px !important;
+    padding: 10px 12px !important;
+  }
+
+  .header-left,
+  .header-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+  }
+
+  .header-right {
+    display: flex !important;
+    justify-content: flex-end !important;
+    justify-self: end !important;
+  }
+
+  .chat-title {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: min(100%, 220px) !important;
+    margin: 0 auto !important;
+    justify-self: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .chat-title-logo {
+    width: 44px !important;
+    height: 44px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .chat-title-text {
+    min-width: 0 !important;
+    margin-left: -6px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 1rem !important;
+  }
+
+  .apk-download-btn {
+    width: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+
+  .apk-download-btn .apk-text {
+    display: none !important;
+  }
+}
+
+body.app-view .chat-header {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+  height: auto !important;
+  min-height: 64px !important;
+  padding: 10px 12px !important;
+}
+
+body.app-view .header-left,
+body.app-view .header-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+
+body.app-view .header-right {
+  justify-content: flex-end !important;
+  justify-self: end !important;
+}
+
+body.app-view .chat-title {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: min(100%, 220px) !important;
+  margin: 0 auto !important;
+  justify-self: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+body.app-view .chat-title-logo {
+  width: 44px !important;
+  height: 44px !important;
+  flex-shrink: 0 !important;
+}
+
+body.app-view .chat-title-text {
+  min-width: 0 !important;
+  margin-left: -6px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 1rem !important;
 }
