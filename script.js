@@ -124,6 +124,7 @@ function revealAppShell() {
 
 function scrollChatToBottom(force = false) {
   if (!chatbox) return;
+  if (!force && isAssistantTypingAnimationActive) return;
   const distanceFromBottom =
     chatbox.scrollHeight - chatbox.scrollTop - chatbox.clientHeight;
   if (!force && distanceFromBottom > 140) return;
@@ -136,6 +137,7 @@ function scrollChatToBottom(force = false) {
 }
 
 function scheduleChatScroll(force = false) {
+  if (!force && isAssistantTypingAnimationActive) return;
   if (force) {
     if (pendingChatScrollFrame) {
       cancelAnimationFrame(pendingChatScrollFrame);
@@ -1217,6 +1219,7 @@ const STT_AUTO_SEND_PAUSE_MS = 1200;
 let isRequestInFlight = false;
 let activeRequestController = null;
 let stopGenerationRequested = false;
+let isAssistantTypingAnimationActive = false;
 let pendingChatScrollFrame = 0;
 let sessionsSidebarLoadPromise = null;
 let lastSessionsSidebarSnapshot = "";
@@ -1282,12 +1285,14 @@ async function rollbackCancelledResponse(userMessage) {
 function setComposerBusy(isBusy) {
   isRequestInFlight = !!isBusy;
   if (chatInput) {
-    chatInput.readOnly = isRequestInFlight;
-    chatInput.style.opacity = isRequestInFlight ? "0.85" : "";
+    chatInput.readOnly = false;
+    chatInput.style.opacity = "";
   }
   if (sendChatBtn) {
     sendChatBtn.disabled = isRequestInFlight;
-    sendChatBtn.style.display = isRequestInFlight ? "none" : "inline-flex";
+    sendChatBtn.style.display = "inline-flex";
+    sendChatBtn.style.opacity = isRequestInFlight ? "0.55" : "";
+    sendChatBtn.style.cursor = isRequestInFlight ? "not-allowed" : "";
   }
   if (stopChatBtn) {
     stopChatBtn.disabled = !isRequestInFlight;
@@ -2352,7 +2357,7 @@ async function generateResponse(
         prompt: userMessage,
       });
     } else {
-      renderAssistantMessage(messageElement, responseText);
+      await renderAssistantMessageAnimated(messageElement, responseText);
       throwIfGenerationStopped();
     }
 
@@ -2370,7 +2375,9 @@ async function generateResponse(
     });
 
     // Update sidebar
-    await loadSessionsSidebar();
+    loadSessionsSidebar().catch((sidebarError) => {
+      console.error("Failed to refresh sessions sidebar:", sidebarError);
+    });
   } catch (error) {
     console.error("Error generating response:", error);
     if (error?.name === "AbortError") {
@@ -2535,6 +2542,39 @@ function renderAssistantMessage(contentElement, messageText) {
     }
     contentElement.innerHTML = parseFencedBlocks(text);
     scrollChatToBottom(true);
+}
+
+function getAdaptiveTypingSpeeds(fullText = "") {
+    const length = String(fullText || "").length;
+    if (length > 3200) return { textSpeed: 1, codeSpeed: 0 };
+    if (length > 1800) return { textSpeed: 2, codeSpeed: 1 };
+    if (length > 900) return { textSpeed: 4, codeSpeed: 2 };
+    if (length > 300) return { textSpeed: 6, codeSpeed: 3 };
+    return { textSpeed: 9, codeSpeed: 4 };
+}
+
+async function renderAssistantMessageAnimated(contentElement, messageText) {
+    const text = String(messageText || "");
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    if (
+        reducedMotion ||
+        isWeatherReplyText(text) ||
+        isGeneratedImageReplyText(text)
+    ) {
+        renderAssistantMessage(contentElement, text);
+        return;
+    }
+
+    const { textSpeed, codeSpeed } = getAdaptiveTypingSpeeds(text);
+    isAssistantTypingAnimationActive = true;
+    try {
+        await typeTextAndCode(contentElement, text, textSpeed, codeSpeed);
+        if (window.Prism) Prism.highlightAllUnder(contentElement);
+    } finally {
+        isAssistantTypingAnimationActive = false;
+        scrollChatToBottom(true);
+    }
 }
 
 async function renderTypedBoxReply(messageElement, text) {
