@@ -608,6 +608,8 @@ function buildPrompt({ question, recentMessages, documentContext, memoryText }) 
   return [
     "SYSTEM:",
     "You are Genie AI, a helpful assistant that explains clearly, simply, and accurately.",
+    "If the user asks who you are or your name, reply that you are Genie, an AI assistant.",
+    "Do not say you are Sarvam or Sarvam Chat. Sarvam is only the backend provider.",
     "",
     "USER MEMORY:",
     memoryText || "No saved memory.",
@@ -817,7 +819,11 @@ async function getSession() {
 // âœ… SINGLE getUserId function (KEEP THIS ONE, DELETE THE OTHER)
 async function getUserId() {
   // Use only authenticated Supabase user
-  const user = await getCurrentUser();
+  let user = await getCurrentUser();
+  if (!user) {
+    await recoverAuthSession();
+    user = await getCurrentUser();
+  }
   if (user) {
     return user.id;
   }
@@ -1047,9 +1053,50 @@ const IS_LOCAL_HOST = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostnam
 const BACKEND_URL = IS_LOCAL_HOST
   ? "http://localhost:3000"
   : (window.GENIE_BACKEND_URL || DEFAULT_BACKEND_URL);
+const ACTIVE_CHAT_STORAGE_KEY = "genie_activeChatId";
+const APP_RESUME_THROTTLE_MS = 2500;
+
+function readStoredActiveChatId() {
+  try {
+    const stored = localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY);
+    return isValidChatId(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistActiveChatId(chatId) {
+  const nextChatId = isValidChatId(chatId) ? String(chatId).trim() : null;
+  activeChatId = nextChatId;
+  try {
+    if (nextChatId) localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, nextChatId);
+    else localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+  } catch {}
+  return nextChatId;
+}
+
+async function recoverAuthSession() {
+  if (!ensureSupabase()) return null;
+
+  try {
+    const session = await getSession();
+    if (session?.access_token) return session;
+  } catch (error) {
+    console.warn("Initial session read failed:", error);
+  }
+
+  try {
+    const { data, error } = await supabaseClient.auth.refreshSession();
+    if (error) throw error;
+    return data?.session || null;
+  } catch (error) {
+    console.warn("Session recovery failed:", error);
+    return null;
+  }
+}
 
 async function apiFetch(url, options = {}) {
-  const session = await getSession();
+  const session = await recoverAuthSession();
   const accessToken = session?.access_token;
   if (!accessToken) {
     window.location.href = "./auth.html";
@@ -1097,7 +1144,7 @@ async function apiFetch(url, options = {}) {
 
 let searchHistory = JSON.parse(localStorage.getItem("searchHistory")) || [];
 let conversationMemory = [];
-let activeChatId = null;
+let activeChatId = readStoredActiveChatId();
 let speechRecognition = null;
 let voices = [];
 let sttSupported = false;
@@ -1112,6 +1159,7 @@ let stopGenerationRequested = false;
 let pendingChatScrollFrame = 0;
 let sessionsSidebarLoadPromise = null;
 let lastSessionsSidebarSnapshot = "";
+let lastAppResumeAt = 0;
 
 function isValidChatId(value) {
   const chatId = String(value || "").trim();
@@ -1243,7 +1291,8 @@ async function initializeApp() {
   loadMemories();
   loadActiveDocument();
 
-  // 2) User - âœ… FIXED with await
+  // 2) Recover auth after long idle before checking the current user
+  await recoverAuthSession();
   const userId = await getUserId();
   if (!userId) {
     console.warn("No authenticated session found. Redirecting to auth page...");
@@ -1264,8 +1313,11 @@ async function initializeApp() {
   // 5) Backend check
   testBackendConnection().catch(console.error);
 
-  // 6) Load history, but keep the main view as a fresh draft until the user sends or opens a chat
-  await ensureActiveChat({ createIfMissing: false, loadMessages: false });
+  // 6) Restore previous chat when one was open, otherwise keep the fresh draft view
+  await ensureActiveChat({
+    createIfMissing: false,
+    loadMessages: !!activeChatId,
+  });
 
   console.log("âœ… App initialized");
 }
@@ -1529,6 +1581,20 @@ function initEventListeners() {
     
     // Handle window resize
     window.addEventListener("resize", handleResize);
+    window.addEventListener("pageshow", () => {
+        resumeAppSession({ reloadChat: true }).catch(console.error);
+    });
+    window.addEventListener("focus", () => {
+        resumeAppSession({ reloadChat: false }).catch(console.error);
+    });
+    window.addEventListener("online", () => {
+        resumeAppSession({ reloadChat: true }).catch(console.error);
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            resumeAppSession({ reloadChat: true }).catch(console.error);
+        }
+    });
 }
 
 // 5. CHAT MANAGEMENT
@@ -1565,8 +1631,7 @@ async function startChat() {
 }
 
 function resetChatDraftView() {
-    activeChatId = null;
-    localStorage.removeItem("genie_activeChatId");
+    persistActiveChatId(null);
     conversationMemory = [];
     if (chatbox) {
         chatbox.innerHTML = "";
@@ -1585,8 +1650,7 @@ async function ensureActiveChat(options = {}) {
     if (!userId) return;
 
     if (activeChatId && !isValidChatId(activeChatId)) {
-        activeChatId = null;
-        localStorage.removeItem("genie_activeChatId");
+        persistActiveChatId(null);
     }
     
     if (!activeChatId) {
@@ -1597,8 +1661,7 @@ async function ensureActiveChat(options = {}) {
         }
 
         // Keep the draft local until the first successful response is saved.
-        activeChatId = generateDraftChatId();
-        localStorage.setItem("genie_activeChatId", activeChatId);
+        persistActiveChatId(generateDraftChatId());
     }
     
     if (refreshSidebar) {
@@ -1621,8 +1684,7 @@ async function createNewChat() {
 }
 
 async function openSession(chatId) {
-    activeChatId = chatId;
-    localStorage.setItem("genie_activeChatId", activeChatId);
+    persistActiveChatId(chatId);
     await loadChatFromServer(chatId);
     await loadSessionsSidebar();
     syncFreshChatLayout();
@@ -1822,6 +1884,9 @@ async function loadSessionsSidebar(force = false) {
             errorLi.textContent = "Failed to load chats";
             historyList.innerHTML = "";
             historyList.appendChild(errorLi);
+            setTimeout(() => {
+                loadSessionsSidebar(true).catch(() => {});
+            }, 2500);
         } finally {
             sessionsSidebarLoadPromise = null;
         }
@@ -1871,6 +1936,16 @@ async function loadChatFromServer(chatId) {
         syncFreshChatLayout();
     } catch (error) {
         console.error("âŒ Error loading chat:", error);
+        const looksRecoverable =
+            error?.name === "TypeError" ||
+            /network|fetch|load chat/i.test(String(error?.message || ""));
+        if (looksRecoverable) {
+            setTimeout(() => {
+                if (chatId === activeChatId) {
+                    loadChatFromServer(chatId).catch(() => {});
+                }
+            }, 2500);
+        }
         // Create properly styled error message
         const errorLi = document.createElement("li");
         errorLi.className = "chat incoming error";
@@ -1922,6 +1997,34 @@ async function deleteAllChats() {
         await loadSessionsSidebar();
     } catch (error) {
         console.error("âŒ Error deleting all chats:", error);
+    }
+}
+
+async function resumeAppSession(options = {}) {
+    const { reloadChat = true } = options;
+    const now = Date.now();
+    if (now - lastAppResumeAt < APP_RESUME_THROTTLE_MS) return;
+    lastAppResumeAt = now;
+
+    revealAppShell();
+    initUIState();
+
+    const session = await recoverAuthSession();
+    if (!session) return;
+
+    await updateAuthButton();
+    await syncMicAuthState();
+
+    const storedChatId = readStoredActiveChatId();
+    if (storedChatId) {
+        activeChatId = storedChatId;
+    }
+
+    await loadSessionsSidebar(true);
+    if (reloadChat && activeChatId) {
+        await loadChatFromServer(activeChatId);
+    } else {
+        syncFreshChatLayout();
     }
 }
 
