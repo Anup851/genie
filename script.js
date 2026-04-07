@@ -990,6 +990,67 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
+function ensureNetworkBanner() {
+  let banner = document.getElementById("network-status-banner");
+  if (banner) return banner;
+
+  banner = document.createElement("div");
+  banner.id = "network-status-banner";
+  banner.style.cssText = `
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    z-index: 10000;
+    max-width: min(92vw, 520px);
+    width: max-content;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: rgba(17, 24, 39, 0.96);
+    color: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+    font-size: 14px;
+    line-height: 1.45;
+    display: none;
+  `;
+  document.body.appendChild(banner);
+  return banner;
+}
+
+function showNetworkBanner(message) {
+  const banner = ensureNetworkBanner();
+  banner.textContent = message;
+  banner.style.display = "block";
+}
+
+function hideNetworkBanner() {
+  const banner = document.getElementById("network-status-banner");
+  if (banner) banner.style.display = "none";
+}
+
+function isOfflineLikeError(error) {
+  if (!error) return !navigator.onLine;
+  const text = String(error?.message || error).toLowerCase();
+  return (
+    !navigator.onLine ||
+    error?.name === "TypeError" ||
+    text.includes("failed to fetch") ||
+    text.includes("networkerror") ||
+    text.includes("load failed") ||
+    text.includes("network request failed") ||
+    text.includes("internet")
+  );
+}
+
+function getFriendlyOfflineMessage(action = "complete this request") {
+  return `Internet is down. Please check your connection and try again to ${action}.`;
+}
+
+function updateNetworkStatusUI() {
+  if (navigator.onLine) hideNetworkBanner();
+  else showNetworkBanner("Internet is down. Please reconnect and refresh or try again.");
+}
+
 // Add animation styles
 const style = document.createElement('style');
 style.textContent = `
@@ -1267,6 +1328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } finally {
     requestAnimationFrame(() => {
       revealAppShell();
+      updateNetworkStatusUI();
     });
   }
 });
@@ -1588,10 +1650,15 @@ function initEventListeners() {
         resumeAppSession({ reloadChat: false }).catch(console.error);
     });
     window.addEventListener("online", () => {
+        updateNetworkStatusUI();
         resumeAppSession({ reloadChat: true }).catch(console.error);
+    });
+    window.addEventListener("offline", () => {
+        updateNetworkStatusUI();
     });
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
+            updateNetworkStatusUI();
             resumeAppSession({ reloadChat: true }).catch(console.error);
         }
     });
@@ -1881,7 +1948,9 @@ async function loadSessionsSidebar(force = false) {
             console.error("âŒ Error loading sessions:", error);
             const errorLi = document.createElement("li");
             errorLi.className = "error";
-            errorLi.textContent = "Failed to load chats";
+            errorLi.textContent = isOfflineLikeError(error)
+              ? "Internet is down. Reconnect and refresh to load chats."
+              : "Failed to load chats";
             historyList.innerHTML = "";
             historyList.appendChild(errorLi);
             setTimeout(() => {
@@ -1951,7 +2020,11 @@ async function loadChatFromServer(chatId) {
         errorLi.className = "chat incoming error";
         errorLi.innerHTML = `
             <div class="bot-message-container">
-                <p>Failed to load chat. Please check your connection and try again.</p>
+                <p>${escapeHtml(
+                  isOfflineLikeError(error)
+                    ? "Internet is down. Please reconnect and refresh or open the chat again."
+                    : "Failed to load chat. Please check your connection and try again."
+                )}</p>
             </div>
         `;
         chatbox.innerHTML = "";
@@ -2100,33 +2173,31 @@ function handleChat() {
     chatbox.scrollTo(0, chatbox.scrollHeight);
     syncFreshChatLayout();
     
-    // Show typing indicator and generate response
-    setTimeout(() => {
-        const typingLi = showTypingIndicator();
-        const requestMode = hasMediaPayload
-          ? "media"
-          : shouldUseLocalDocumentChat
-            ? "chat"
-            : shouldGenerateImage
-              ? "image"
-              : "chat";
-        console.log(`[GENIE] Client requestMode=${requestMode} mediaWasSelected=${mediaWasSelected}`);
-        generateResponse(
-          typingLi,
-          userMessage,
-          hasMediaPayload
-            ? {
-                mediaData: imageData,
-                mediaName: imageName || "file",
-                mediaType,
-              }
-            : null,
-          requestMode,
-        ).catch((err) => {
-          console.error("generateResponse error:", err);
-          setComposerBusy(false);
-        });
-    }, 600);
+    // Show typing indicator and generate response immediately
+    const typingLi = showTypingIndicator();
+    const requestMode = hasMediaPayload
+      ? "media"
+      : shouldUseLocalDocumentChat
+        ? "chat"
+        : shouldGenerateImage
+          ? "image"
+          : "chat";
+    console.log(`[GENIE] Client requestMode=${requestMode} mediaWasSelected=${mediaWasSelected}`);
+    generateResponse(
+      typingLi,
+      userMessage,
+      hasMediaPayload
+        ? {
+            mediaData: imageData,
+            mediaName: imageName || "file",
+            mediaType,
+          }
+        : null,
+      requestMode,
+    ).catch((err) => {
+      console.error("generateResponse error:", err);
+      setComposerBusy(false);
+    });
 }
 async function generateResponse(
   incomingChatli,
@@ -2139,6 +2210,13 @@ async function generateResponse(
   const hasMediaUpload = requestMode === "media";
   const isImageGeneration = requestMode === "image";
   let responseRenderingStarted = false;
+
+  if (!navigator.onLine) {
+    messageElement.textContent = getFriendlyOfflineMessage("send your message");
+    showNetworkBanner("Internet is down. Please reconnect and try again.");
+    setComposerBusy(false);
+    return;
+  }
 
   const ensuredChatId = await ensureActiveChat({
     createIfMissing: true,
@@ -2274,12 +2352,8 @@ async function generateResponse(
         prompt: userMessage,
       });
     } else {
-      messageElement.innerHTML = "";
-      const textSpeed =
-        responseText.length > 2200 ? 4 : responseText.length > 1200 ? 7 : 12;
-      await typeTextAndCode(messageElement, responseText, textSpeed, 5);
-      throwIfGenerationStopped();
       renderAssistantMessage(messageElement, responseText);
+      throwIfGenerationStopped();
     }
 
     if (window.Prism) Prism.highlightAllUnder(messageElement);
@@ -2322,11 +2396,25 @@ async function generateResponse(
             : "Request timed out. Please try again.";
       }
     } else {
-      messageElement.innerHTML = hasMediaUpload
-        ? "Media analysis failed or service is busy. Please try again shortly."
-        : isImageGeneration
-          ? "Image generation failed or service is busy. Please try again shortly."
-          : "Failed to get response. Please try again.";
+      const offlineMessage = isOfflineLikeError(error)
+        ? getFriendlyOfflineMessage(
+            hasMediaUpload
+              ? "analyze the file"
+              : isImageGeneration
+                ? "generate the image"
+                : "get a reply"
+          )
+        : "";
+      if (offlineMessage) {
+        messageElement.textContent = offlineMessage;
+        showNetworkBanner("Internet is down. Please reconnect and try again.");
+      } else {
+        messageElement.innerHTML = hasMediaUpload
+          ? "Media analysis failed or service is busy. Please try again shortly."
+          : isImageGeneration
+            ? "Image generation failed or service is busy. Please try again shortly."
+            : "Failed to get response. Please try again.";
+      }
     }
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -3253,6 +3341,7 @@ async function testBackendConnection() {
 
         if (response.ok) {
             console.log("âœ… Backend is reachable");
+            hideNetworkBanner();
             return true;
         } else {
             console.error("âŒ Backend error:", response.status);
@@ -3260,6 +3349,9 @@ async function testBackendConnection() {
         }
     } catch (error) {
         console.error("âŒ Cannot reach backend:", error);
+        if (isOfflineLikeError(error)) {
+            showNetworkBanner("Internet is down. Please reconnect and refresh or try again.");
+        }
         return false;
     }
 }
@@ -3353,52 +3445,46 @@ document.addEventListener("click", function(e) {
 // ================= WEBVIEW FIX FOR SIDEBAR CLOSE BUTTON =================
 
 function setupWebViewCloseButton() {
-  console.log("ðŸ”§ Setting up WebView close button...");
-  
   const closeBtn = document.getElementById("close-sidebar");
   const sidebar = document.querySelector(".history-sidebar");
   
   if (!closeBtn || !sidebar) {
-    console.log("â³ WebView: Waiting for elements...");
     return;
   }
-  
-  console.log("âœ… WebView: Found close button and sidebar");
-  
-  // SIMPLEST SOLUTION: Direct onclick
+
+  if (closeBtn.dataset.webviewBound === "true") {
+    return;
+  }
+
   closeBtn.onclick = function(e) {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    console.log("ðŸŽ¯ WebView: Close button CLICKED!");
-    
-    // Close sidebar
+
     sidebar.classList.remove("active");
-    
-    // Force hide on mobile
+
     if (window.innerWidth <= 480) {
       sidebar.style.transform = "translateX(-100%)";
       sidebar.style.display = "none";
     }
-    
+
     return false;
   };
-  
-  console.log("âœ… WebView: Close button setup complete");
+
+  closeBtn.dataset.webviewBound = "true";
 }
 
-// Run setup immediately and multiple times
+// Run setup once plus a few delayed fallbacks for slow WebViews
 setupWebViewCloseButton();
 setTimeout(setupWebViewCloseButton, 500);
 setTimeout(setupWebViewCloseButton, 1000);
 setTimeout(setupWebViewCloseButton, 2000);
 
-// Run when sidebar opens
+// Re-run quietly only when the close button may have been re-rendered
 document.addEventListener("click", function(e) {
   if (e.target.closest("#sidebar-toggle") || 
       e.target.closest(".start-chat-btn")) {
-    console.log("ðŸ”„ Sidebar state changed, re-setting up close button...");
     setTimeout(setupWebViewCloseButton, 300);
   }
 });
