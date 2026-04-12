@@ -3419,7 +3419,7 @@ function escapeHtml(str) {
 
 async function testBackendConnection() {
     try {
-        const response = await fetch(`${BACKEND_URL}/`);
+        const response = await fetch(`${BACKEND_URL}/api/health`);
 
         if (response.ok) {
             console.log("âœ… Backend is reachable");
