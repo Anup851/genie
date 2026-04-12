@@ -533,25 +533,12 @@
           signupForm.classList.toggle("active", !loginMode);
         }
 
-        function showLoggedInUI(email, { redirect = false } = {}) {
+        function showLoggedInUI(email) {
           alreadyBox.style.display = "block";
           authContent.style.display = "none";
           loggedEmail.textContent = "Logged in as: " + (email || "");
-          showStatus(
-            "success",
-            redirect ? "Login successful. Opening chat..." : "You are already logged in."
-          );
-
-          if (redirect) {
-            const targetUrl =
-              sessionStorage.getItem("genie_post_login_redirect") || getAppEntryUrl();
-            sessionStorage.removeItem("genie_post_login_redirect");
-            setPendingRedirect(false);
-
-            setTimeout(() => {
-              window.location.replace(targetUrl);
-            }, 500);
-          }
+          setPendingRedirect(false);
+          showStatus("success", "You are already logged in.");
         }
 
         function showAuthFormsUI() {
@@ -572,7 +559,7 @@
           showStatus("info", "Redirecting to Google...");
           setGoogleButtonLoading(true);
           sessionStorage.setItem("genie_post_login_redirect", getAppEntryUrl());
-          setPendingRedirect(true);
+          setPendingRedirect(false);
 
           const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: "google",
@@ -644,7 +631,7 @@
           card.classList.add("fade-out");
           setTimeout(() => {
             card.classList.remove("fade-out");
-            showLoggedInUI(sessionEmail, { redirect: true });
+            showLoggedInUI(sessionEmail);
           }, 220);
         });
 
@@ -688,7 +675,7 @@
             showStatus("success", "Account created and logged in.");
             setPendingRedirect(false);
             setTimeout(() => {
-              showLoggedInUI(data.user?.email || email, { redirect: true });
+              showLoggedInUI(data.user?.email || email);
             }, 350);
           } else {
             showStatus("success", "Account created! Check your email for confirmation.");
@@ -704,8 +691,7 @@
           }
 
           if (session?.user) {
-            const shouldRedirect = event === "SIGNED_IN" && hasPendingRedirect();
-            showLoggedInUI(session.user.email || "", { redirect: shouldRedirect });
+            showLoggedInUI(session.user.email || "");
           } else {
             clearStoredAuthState();
             showAuthFormsUI();
@@ -725,7 +711,7 @@
           }
 
           if (session) {
-            showLoggedInUI(session.user?.email || "", { redirect: hasPendingRedirect() });
+            showLoggedInUI(session.user?.email || "");
           } else {
             clearStoredAuthState();
             showAuthFormsUI();
