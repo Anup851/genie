@@ -428,8 +428,16 @@
         const SUPABASE_URL = "https://nikzyppkwedmzldghrgh.supabase.co";
         const SUPABASE_ANON_KEY =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM";
-        const urlParams = new URLSearchParams(window.location.search);
-        const forceLoggedOut = urlParams.has("logged_out");
+        const REDIRECT_FLAG_KEY = "genie_auth_redirect_pending";
+        const GOOGLE_BUTTON_HTML = `
+          <svg class="oauth-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.72 1.22 9.22 3.6l6.86-6.86C35.9 2.36 30.4 0 24 0 14.64 0 6.56 5.38 2.56 13.22l7.98 6.19C12.46 13.64 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.5 24.55c0-1.64-.15-3.21-.41-4.73H24v9.02h12.65c-.54 2.9-2.18 5.36-4.63 7.02l7.49 5.81c4.38-4.04 6.99-9.99 6.99-17.12z"/>
+            <path fill="#FBBC05" d="M10.54 28.59A14.5 14.5 0 0 1 9.76 24c0-1.6.28-3.15.78-4.59l-7.98-6.19A23.93 23.93 0 0 0 0 24c0 3.86.92 7.52 2.56 10.78l7.98-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.92-2.13 15.89-5.8l-7.49-5.81c-2.08 1.39-4.74 2.21-8.4 2.21-6.26 0-11.54-4.14-13.46-9.91l-7.98 6.19C6.56 42.62 14.64 48 24 48z"/>
+          </svg>
+          <span>Continue with Google</span>
+        `;
 
         if (!window.supabase) {
           alert("Supabase CDN failed to load. Check internet / script tag.");
@@ -472,12 +480,18 @@
           btn.textContent = isLoading ? "Please wait..." : defaultText;
         }
 
+        function setGoogleButtonLoading(isLoading) {
+          googleLoginBtn.disabled = isLoading;
+          googleLoginBtn.innerHTML = isLoading ? "<span>Please wait...</span>" : GOOGLE_BUTTON_HTML;
+        }
+
         function getAppEntryUrl() {
           return new URL("./index.html", window.location.href).toString();
         }
 
         function clearStoredAuthState() {
           sessionStorage.removeItem("genie_post_login_redirect");
+          sessionStorage.removeItem(REDIRECT_FLAG_KEY);
 
           try {
             Object.keys(localStorage).forEach((key) => {
@@ -499,6 +513,15 @@
             const cleanUrl = `${window.location.origin}${window.location.pathname}`;
             window.history.replaceState({}, document.title, cleanUrl);
           } catch {}
+        }
+
+        function setPendingRedirect(enabled) {
+          if (enabled) sessionStorage.setItem(REDIRECT_FLAG_KEY, "1");
+          else sessionStorage.removeItem(REDIRECT_FLAG_KEY);
+        }
+
+        function hasPendingRedirect() {
+          return sessionStorage.getItem(REDIRECT_FLAG_KEY) === "1";
         }
 
         function switchTab(mode) {
@@ -523,6 +546,7 @@
             const targetUrl =
               sessionStorage.getItem("genie_post_login_redirect") || getAppEntryUrl();
             sessionStorage.removeItem("genie_post_login_redirect");
+            setPendingRedirect(false);
 
             setTimeout(() => {
               window.location.replace(targetUrl);
@@ -534,18 +558,7 @@
           alreadyBox.style.display = "none";
           authContent.style.display = "block";
           switchTab("login");
-          setLoading(googleLoginBtn, false, "Continue with Google");
-        }
-
-        function animateToLoginUI() {
-          card.classList.add("fade-out");
-
-          setTimeout(() => {
-            showAuthFormsUI();
-            card.classList.remove("fade-out");
-            void card.offsetWidth;
-            card.classList.add("fade-in");
-          }, 260);
+          setGoogleButtonLoading(false);
         }
 
         tabLogin.addEventListener("click", () => switchTab("login"));
@@ -557,8 +570,9 @@
         googleLoginBtn.addEventListener("click", async () => {
           clearStatus();
           showStatus("info", "Redirecting to Google...");
-          setLoading(googleLoginBtn, true, "Continue with Google");
+          setGoogleButtonLoading(true);
           sessionStorage.setItem("genie_post_login_redirect", getAppEntryUrl());
+          setPendingRedirect(true);
 
           const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: "google",
@@ -568,7 +582,8 @@
           });
 
           if (error) {
-            setLoading(googleLoginBtn, false, "Continue with Google");
+            setPendingRedirect(false);
+            setGoogleButtonLoading(false);
             showStatus("error", error.message);
           }
         });
@@ -592,8 +607,8 @@
           showStatus("success", "Logged out successfully");
 
           setTimeout(() => {
+            showAuthFormsUI();
             logoutInProgress = false;
-            window.location.replace("./auth.html?logged_out=1");
           }, 350);
         });
 
@@ -623,6 +638,7 @@
           }
 
           showStatus("success", "Login successful");
+          setPendingRedirect(false);
           const sessionEmail = data?.user?.email || email;
 
           card.classList.add("fade-out");
@@ -670,6 +686,7 @@
             showStatus("error", "Email already registered. Try logging in.");
           } else if (data.session) {
             showStatus("success", "Account created and logged in.");
+            setPendingRedirect(false);
             setTimeout(() => {
               showLoggedInUI(data.user?.email || email, { redirect: true });
             }, 350);
@@ -681,25 +698,21 @@
 
         supabaseClient.auth.onAuthStateChange((event, session) => {
           if (logoutInProgress || event === "SIGNED_OUT") {
-            showAuthFormsUI();
-            return;
-          }
-
-          if (session?.user) {
-            const shouldRedirect = event === "SIGNED_IN";
-            showLoggedInUI(session.user.email || "", { redirect: shouldRedirect });
-          } else {
-            showAuthFormsUI();
-          }
-        });
-
-        (async function checkExistingSession() {
-          if (forceLoggedOut) {
             clearStoredAuthState();
             showAuthFormsUI();
             return;
           }
 
+          if (session?.user) {
+            const shouldRedirect = event === "SIGNED_IN" && hasPendingRedirect();
+            showLoggedInUI(session.user.email || "", { redirect: shouldRedirect });
+          } else {
+            clearStoredAuthState();
+            showAuthFormsUI();
+          }
+        });
+
+        (async function checkExistingSession() {
           const {
             data: { session },
             error,
@@ -712,8 +725,9 @@
           }
 
           if (session) {
-            showLoggedInUI(session.user?.email || "", { redirect: false });
+            showLoggedInUI(session.user?.email || "", { redirect: hasPendingRedirect() });
           } else {
+            clearStoredAuthState();
             showAuthFormsUI();
           }
         })();
