@@ -428,6 +428,8 @@
         const SUPABASE_URL = "https://nikzyppkwedmzldghrgh.supabase.co";
         const SUPABASE_ANON_KEY =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM";
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceLoggedOut = urlParams.has("logged_out");
 
         if (!window.supabase) {
           alert("Supabase CDN failed to load. Check internet / script tag.");
@@ -492,6 +494,11 @@
               }
             });
           } catch {}
+
+          try {
+            const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+            window.history.replaceState({}, document.title, cleanUrl);
+          } catch {}
         }
 
         function switchTab(mode) {
@@ -505,7 +512,7 @@
 
         function showLoggedInUI(email, { redirect = false } = {}) {
           alreadyBox.style.display = "block";
-          authContent.style.display = redirect ? "none" : "block";
+          authContent.style.display = "none";
           loggedEmail.textContent = "Logged in as: " + (email || "");
           showStatus(
             "success",
@@ -585,10 +592,9 @@
           showStatus("success", "Logged out successfully");
 
           setTimeout(() => {
-            clearStatus();
-            animateToLoginUI();
             logoutInProgress = false;
-          }, 450);
+            window.location.replace("./auth.html?logged_out=1");
+          }, 350);
         });
 
         loginForm.addEventListener("submit", async (event) => {
@@ -688,6 +694,12 @@
         });
 
         (async function checkExistingSession() {
+          if (forceLoggedOut) {
+            clearStoredAuthState();
+            showAuthFormsUI();
+            return;
+          }
+
           const {
             data: { session },
             error,
