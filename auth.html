@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genie Auth</title>
 
-    <!-- ✅ Supabase -->
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <!-- ✅ Material Icons (for the chat icon button) -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
 
     <style>
@@ -68,11 +65,11 @@
         transition: opacity 220ms ease, transform 220ms ease;
       }
 
-      /* ✅ page transition animation */
       .fade-out {
         opacity: 0;
         transform: translateY(10px);
       }
+
       .fade-in {
         opacity: 1;
         transform: translateY(0);
@@ -160,9 +157,58 @@
         border-color: rgba(59, 130, 246, 0.35);
       }
 
+      .oauth-panel {
+        margin-bottom: 18px;
+      }
+
+      .oauth-btn {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.96);
+        color: #111827;
+        font-weight: 700;
+        font-size: 0.98rem;
+        cursor: pointer;
+        transition: transform 0.16s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      }
+
+      .oauth-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.28);
+      }
+
+      .oauth-note {
+        margin-top: 10px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 18px;
+        color: var(--text-muted);
+        font-size: 0.88rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
       form {
         display: none;
       }
+
       form.active {
         display: block;
       }
@@ -220,7 +266,6 @@
         transform: translateY(0);
       }
 
-      /* ✅ Logged-in section (same theme) */
       #already-logged {
         display: none;
         border: 1px solid var(--border);
@@ -250,7 +295,6 @@
         align-items: center;
       }
 
-      /* ✅ Icon button for chat */
       .icon-btn {
         width: 46px;
         height: 46px;
@@ -283,11 +327,13 @@
         body {
           padding: 14px;
         }
+
         .card {
           max-width: 100%;
           padding: 22px 16px;
           border-radius: 15px;
         }
+
         .title {
           font-size: 1.42rem;
         }
@@ -301,13 +347,11 @@
 
       <h1 class="title">Genie</h1>
 
-      <!-- ✅ Already logged in -->
       <div id="already-logged">
-        <h2>✅ You are already logged in</h2>
+        <h2>You are already logged in</h2>
         <p id="logged-email">Loading...</p>
 
         <div class="row-btns">
-          <!-- ✅ ICON instead of button -->
           <button id="go-chat-btn" class="icon-btn" type="button" title="Go to Chat" aria-label="Go to Chat">
             <span class="material-icons">chat</span>
           </button>
@@ -316,40 +360,48 @@
         </div>
       </div>
 
-      <div class="tabs" id="auth-tabs">
-        <button class="tab active" id="tab-login" type="button">Login</button>
-        <button class="tab" id="tab-signup" type="button">Sign Up</button>
+      <div id="auth-content">
+        <div class="oauth-panel">
+          <button id="google-login-btn" class="oauth-btn" type="button">Continue with Google</button>
+          <p class="oauth-note">Or use your email and password below.</p>
+        </div>
+
+        <div class="divider">or</div>
+
+        <div class="tabs" id="auth-tabs">
+          <button class="tab active" id="tab-login" type="button">Login</button>
+          <button class="tab" id="tab-signup" type="button">Sign Up</button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <form id="form-login" class="active" novalidate>
+          <label for="login-username">Email</label>
+          <input id="login-username" type="email" autocomplete="username" required />
+
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" required />
+
+          <button class="submit" id="login-btn" type="submit">Login</button>
+        </form>
+
+        <form id="form-signup" novalidate>
+          <label for="signup-username">Email</label>
+          <input id="signup-username" type="email" autocomplete="username" required />
+
+          <label for="signup-password">Password</label>
+          <input id="signup-password" type="password" autocomplete="new-password" minlength="6" required />
+
+          <label for="signup-confirm">Confirm Password</label>
+          <input id="signup-confirm" type="password" autocomplete="new-password" minlength="6" required />
+
+          <button class="submit" id="signup-btn" type="submit">Create Account</button>
+        </form>
       </div>
-
-      <div id="status" class="status"></div>
-
-      <form id="form-login" class="active" novalidate>
-        <label for="login-username">Email</label>
-        <input id="login-username" type="email" autocomplete="username" required />
-
-        <label for="login-password">Password</label>
-        <input id="login-password" type="password" autocomplete="current-password" required />
-
-        <button class="submit" id="login-btn" type="submit">Login</button>
-      </form>
-
-      <form id="form-signup" novalidate>
-        <label for="signup-username">Email</label>
-        <input id="signup-username" type="email" autocomplete="username" required />
-
-        <label for="signup-password">Password</label>
-        <input id="signup-password" type="password" autocomplete="new-password" minlength="6" required />
-
-        <label for="signup-confirm">Confirm Password</label>
-        <input id="signup-confirm" type="password" autocomplete="new-password" minlength="6" required />
-
-        <button class="submit" id="signup-btn" type="submit">Create Account</button>
-      </form>
     </div>
 
     <script>
       window.addEventListener("DOMContentLoaded", () => {
-        // ================= CONFIGURATION =================
         const SUPABASE_URL = "https://nikzyppkwedmzldghrgh.supabase.co";
         const SUPABASE_ANON_KEY =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pa3p5cHBrd2VkbXpsZGdocmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0OTU1NzQsImV4cCI6MjA4NTA3MTU3NH0.ssb4-8V0wkkxyfDQSzfzgTrTbjxDu1OWyjogzJlupYM";
@@ -363,26 +415,22 @@
           auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
         });
 
-        // ================= UI ELEMENTS =================
         const card = document.getElementById("card");
-
         const tabLogin = document.getElementById("tab-login");
         const tabSignup = document.getElementById("tab-signup");
         const closeAuthBtn = document.getElementById("close-auth-btn");
         const loginForm = document.getElementById("form-login");
         const signupForm = document.getElementById("form-signup");
         const statusBox = document.getElementById("status");
-
+        const authContent = document.getElementById("auth-content");
+        const googleLoginBtn = document.getElementById("google-login-btn");
         const loginBtn = document.getElementById("login-btn");
         const signupBtn = document.getElementById("signup-btn");
-
         const alreadyBox = document.getElementById("already-logged");
         const loggedEmail = document.getElementById("logged-email");
-        const authTabs = document.getElementById("auth-tabs");
         const goChatBtn = document.getElementById("go-chat-btn");
         const logoutBtn = document.getElementById("logout-btn");
 
-        // ================= HELPERS =================
         function showStatus(type, message) {
           statusBox.className = `status ${type}`;
           statusBox.textContent = message;
@@ -398,6 +446,10 @@
           btn.textContent = isLoading ? "Please wait..." : defaultText;
         }
 
+        function getAppEntryUrl() {
+          return new URL("./index.html", window.location.href).toString();
+        }
+
         function switchTab(mode) {
           clearStatus();
           const loginMode = mode === "login";
@@ -409,42 +461,61 @@
 
         function showLoggedInUI(email) {
           alreadyBox.style.display = "block";
-          authTabs.style.display = "none";
-          loginForm.classList.remove("active");
-          signupForm.classList.remove("active");
+          authContent.style.display = "none";
           loggedEmail.textContent = "Logged in as: " + (email || "");
-          clearStatus();
+          showStatus("success", "Login successful. Opening chat...");
+
+          const targetUrl =
+            sessionStorage.getItem("genie_post_login_redirect") || getAppEntryUrl();
+          sessionStorage.removeItem("genie_post_login_redirect");
+
+          setTimeout(() => {
+            window.location.replace(targetUrl);
+          }, 500);
         }
 
         function showAuthFormsUI() {
           alreadyBox.style.display = "none";
-          authTabs.style.display = "flex";
+          authContent.style.display = "block";
           switchTab("login");
+          setLoading(googleLoginBtn, false, "Continue with Google");
         }
 
-        // ✅ Smooth animation when switching logged-in → login forms after logout
         function animateToLoginUI() {
-          // fade out the card slightly
           card.classList.add("fade-out");
 
           setTimeout(() => {
-            // show login UI
             showAuthFormsUI();
-
-            // reset animation
             card.classList.remove("fade-out");
-            // force reflow for clean transition
             void card.offsetWidth;
             card.classList.add("fade-in");
           }, 260);
         }
 
-        // ================= EVENTS =================
         tabLogin.addEventListener("click", () => switchTab("login"));
         tabSignup.addEventListener("click", () => switchTab("signup"));
 
         closeAuthBtn.addEventListener("click", () => (window.location.href = "index.html"));
         goChatBtn.addEventListener("click", () => (window.location.href = "index.html"));
+
+        googleLoginBtn.addEventListener("click", async () => {
+          clearStatus();
+          showStatus("info", "Redirecting to Google...");
+          setLoading(googleLoginBtn, true, "Continue with Google");
+          sessionStorage.setItem("genie_post_login_redirect", getAppEntryUrl());
+
+          const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: "google",
+            options: {
+              redirectTo: getAppEntryUrl(),
+            },
+          });
+
+          if (error) {
+            setLoading(googleLoginBtn, false, "Continue with Google");
+            showStatus("error", error.message);
+          }
+        });
 
         logoutBtn.addEventListener("click", async () => {
           clearStatus();
@@ -459,16 +530,14 @@
             return;
           }
 
-          showStatus("success", "Logged out successfully ✅");
+          showStatus("success", "Logged out successfully");
 
-          // ✅ after small delay, animate & show login page UI
           setTimeout(() => {
             clearStatus();
             animateToLoginUI();
           }, 450);
         });
 
-        // ================= LOGIN =================
         loginForm.addEventListener("submit", async (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -494,10 +563,9 @@
             return;
           }
 
-          showStatus("success", "Login successful ✅");
+          showStatus("success", "Login successful");
           const sessionEmail = data?.user?.email || email;
 
-          // optional: small animation to switch
           card.classList.add("fade-out");
           setTimeout(() => {
             card.classList.remove("fade-out");
@@ -505,7 +573,6 @@
           }, 220);
         });
 
-        // ================= SIGNUP =================
         signupForm.addEventListener("submit", async (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -542,22 +609,30 @@
 
           if (data.user?.identities?.length === 0) {
             showStatus("error", "Email already registered. Try logging in.");
+          } else if (data.session) {
+            showStatus("success", "Account created and logged in.");
+            setTimeout(() => {
+              showLoggedInUI(data.user?.email || email);
+            }, 350);
           } else {
-            if (data.session) {
-              showStatus("success", "Account created and logged in.");
-              setTimeout(() => {
-                showLoggedInUI(data.user?.email || email);
-              }, 350);
-            } else {
-              showStatus("success", "Account created! Check your email for confirmation.");
-              setTimeout(() => switchTab("login"), 1800);
-            }
+            showStatus("success", "Account created! Check your email for confirmation.");
+            setTimeout(() => switchTab("login"), 1800);
           }
         });
 
-        // ================= CHECK SESSION (NO AUTO REDIRECT) =================
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+          if (session?.user) {
+            showLoggedInUI(session.user.email || "");
+          } else {
+            showAuthFormsUI();
+          }
+        });
+
         (async function checkExistingSession() {
-          const { data: { session }, error } = await supabaseClient.auth.getSession();
+          const {
+            data: { session },
+            error,
+          } = await supabaseClient.auth.getSession();
 
           if (error) {
             console.warn("Session check error:", error.message);
@@ -565,11 +640,13 @@
             return;
           }
 
-          if (session) showLoggedInUI(session.user?.email || "");
-          else showAuthFormsUI();
+          if (session) {
+            showLoggedInUI(session.user?.email || "");
+          } else {
+            showAuthFormsUI();
+          }
         })();
       });
     </script>
   </body>
 </html>
-
