@@ -79,6 +79,7 @@
         position: absolute;
         top: 12px;
         right: 12px;
+        z-index: 3;
         border: 1px solid var(--border);
         background: rgba(15, 23, 42, 0.7);
         color: var(--text-secondary);
@@ -87,6 +88,7 @@
         height: 36px;
         font-size: 1.1rem;
         cursor: pointer;
+        pointer-events: auto;
       }
 
       .close-auth:hover {
@@ -116,6 +118,7 @@
         border: 0;
         padding: 11px 12px;
         cursor: pointer;
+        pointer-events: auto;
         background: transparent;
         color: var(--text-secondary);
         font-weight: 600;
@@ -176,6 +179,7 @@
         align-items: center;
         justify-content: center;
         gap: 10px;
+        pointer-events: auto;
       }
 
       .oauth-btn:hover {
@@ -263,6 +267,7 @@
         color: var(--text-primary);
         font-weight: 700;
         cursor: pointer;
+        pointer-events: auto;
         transition: transform 0.16s ease, box-shadow 0.2s ease, filter 0.2s ease;
       }
 
@@ -500,7 +505,7 @@
 
         function showLoggedInUI(email, { redirect = false } = {}) {
           alreadyBox.style.display = "block";
-          authContent.style.display = "none";
+          authContent.style.display = redirect ? "none" : "block";
           loggedEmail.textContent = "Logged in as: " + (email || "");
           showStatus(
             "success",
@@ -650,3 +655,57 @@
 
           setLoading(signupBtn, false, "Create Account");
 
+          if (error) {
+            showStatus("error", error.message);
+            return;
+          }
+
+          if (data.user?.identities?.length === 0) {
+            showStatus("error", "Email already registered. Try logging in.");
+          } else if (data.session) {
+            showStatus("success", "Account created and logged in.");
+            setTimeout(() => {
+              showLoggedInUI(data.user?.email || email, { redirect: true });
+            }, 350);
+          } else {
+            showStatus("success", "Account created! Check your email for confirmation.");
+            setTimeout(() => switchTab("login"), 1800);
+          }
+        });
+
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+          if (logoutInProgress || event === "SIGNED_OUT") {
+            showAuthFormsUI();
+            return;
+          }
+
+          if (session?.user) {
+            const shouldRedirect = event === "SIGNED_IN";
+            showLoggedInUI(session.user.email || "", { redirect: shouldRedirect });
+          } else {
+            showAuthFormsUI();
+          }
+        });
+
+        (async function checkExistingSession() {
+          const {
+            data: { session },
+            error,
+          } = await supabaseClient.auth.getSession();
+
+          if (error) {
+            console.warn("Session check error:", error.message);
+            showAuthFormsUI();
+            return;
+          }
+
+          if (session) {
+            showLoggedInUI(session.user?.email || "", { redirect: false });
+          } else {
+            showAuthFormsUI();
+          }
+        })();
+      });
+    </script>
+  </body>
+</html>
