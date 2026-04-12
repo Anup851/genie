@@ -804,6 +804,38 @@ function ensureSupabase() {
   return true;
 }
 
+function hasOAuthCallbackParams() {
+  const hash = String(window.location.hash || "");
+  const search = String(window.location.search || "");
+  return /access_token=|refresh_token=|code=|error=|error_code=/i.test(`${hash}${search}`);
+}
+
+function clearOAuthCallbackUrl() {
+  const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+  window.history.replaceState({}, document.title, cleanUrl);
+}
+
+async function waitForSupabaseSession(timeoutMs = 8000, intervalMs = 200) {
+  if (!ensureSupabase()) return null;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session?.access_token) {
+        if (hasOAuthCallbackParams()) clearOAuthCallbackUrl();
+        return session;
+      }
+    } catch (error) {
+      console.warn("Waiting for OAuth session failed:", error);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  return null;
+}
+
 
 // ================= AUTH HELPER FUNCTIONS =================
 async function getCurrentUser() {
@@ -1148,9 +1180,19 @@ async function recoverAuthSession() {
     console.warn("Initial session read failed:", error);
   }
 
+  if (hasOAuthCallbackParams()) {
+    const callbackSession = await waitForSupabaseSession();
+    if (callbackSession?.access_token) {
+      return callbackSession;
+    }
+  }
+
   try {
     const { data, error } = await supabaseClient.auth.refreshSession();
     if (error) throw error;
+    if (data?.session?.access_token && hasOAuthCallbackParams()) {
+      clearOAuthCallbackUrl();
+    }
     return data?.session || null;
   } catch (error) {
     console.warn("Session recovery failed:", error);
