@@ -489,7 +489,7 @@
           return new URL("./index.html", window.location.href).toString();
         }
 
-        function clearStoredAuthState() {
+        function clearPersistedAuthState() {
           sessionStorage.removeItem("genie_post_login_redirect");
           sessionStorage.removeItem(REDIRECT_FLAG_KEY);
 
@@ -508,6 +508,16 @@
               }
             });
           } catch {}
+
+          try {
+            const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+            window.history.replaceState({}, document.title, cleanUrl);
+          } catch {}
+        }
+
+        function clearTransientAuthState() {
+          sessionStorage.removeItem("genie_post_login_redirect");
+          sessionStorage.removeItem(REDIRECT_FLAG_KEY);
 
           try {
             const cleanUrl = `${window.location.origin}${window.location.pathname}`;
@@ -590,7 +600,7 @@
             return;
           }
 
-          clearStoredAuthState();
+          clearPersistedAuthState();
           showStatus("success", "Logged out successfully");
 
           setTimeout(() => {
@@ -685,7 +695,7 @@
 
         supabaseClient.auth.onAuthStateChange((event, session) => {
           if (logoutInProgress || event === "SIGNED_OUT") {
-            clearStoredAuthState();
+            clearPersistedAuthState();
             showAuthFormsUI();
             return;
           }
@@ -693,7 +703,7 @@
           if (session?.user) {
             showLoggedInUI(session.user.email || "");
           } else {
-            clearStoredAuthState();
+            clearTransientAuthState();
             showAuthFormsUI();
           }
         });
@@ -713,7 +723,7 @@
           if (session) {
             showLoggedInUI(session.user?.email || "");
           } else {
-            clearStoredAuthState();
+            clearTransientAuthState();
             showAuthFormsUI();
           }
         })();
@@ -721,3 +731,4 @@
     </script>
   </body>
 </html>
+
