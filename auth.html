@@ -445,7 +445,12 @@
         }
 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
+          auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true,
+            flowType: 'pkce', // Use PKCE flow for better webview compatibility
+          },
         });
 
         const card = document.getElementById("card");
@@ -494,6 +499,7 @@
         function clearPersistedAuthState() {
           sessionStorage.removeItem("genie_post_login_redirect");
           sessionStorage.removeItem(REDIRECT_FLAG_KEY);
+          localStorage.removeItem("genie_session_state");
 
           try {
             Object.keys(localStorage).forEach((key) => {
@@ -558,6 +564,18 @@
           authContent.style.display = "block";
           switchTab("login");
           setGoogleButtonLoading(false);
+        }
+
+        function saveSessionToStorage(session) {
+          if (session?.access_token && session?.user) {
+            localStorage.setItem('genie_session_state', JSON.stringify({
+              accessToken: session.access_token,
+              refreshToken: session.refresh_token,
+              user: session.user,
+              expiresAt: session.expires_at,
+            }));
+            console.log("✅ Session saved from auth.html");
+          }
         }
 
         tabLogin.addEventListener("click", () => switchTab("login"));
@@ -641,6 +659,9 @@
           showStatus("success", "Login successful");
           setPendingRedirect(false);
           const sessionEmail = data?.user?.email || email;
+          
+          // Save session to localStorage for app reopen
+          saveSessionToStorage(data.session);
 
           card.classList.add("fade-out");
           setTimeout(() => {
@@ -688,6 +709,8 @@
           } else if (data.session) {
             showStatus("success", "Account created and logged in.");
             setPendingRedirect(false);
+            // Save session to localStorage for app reopen
+            saveSessionToStorage(data.session);
             setTimeout(() => {
               showLoggedInUI(data.user?.email || email);
             }, 350);
@@ -705,6 +728,8 @@
           }
 
           if (session?.user) {
+            // Save session whenever auth state changes (including Google OAuth)
+            saveSessionToStorage(session);
             showLoggedInUI(session.user.email || "");
           } else {
             clearTransientAuthState();
@@ -725,6 +750,8 @@
           }
 
           if (session) {
+            // Save session found
+            saveSessionToStorage(session);
             showLoggedInUI(session.user?.email || "");
           } else {
             clearTransientAuthState();
