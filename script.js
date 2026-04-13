@@ -26,6 +26,9 @@ const sidebarMemorySummary = document.getElementById("sidebar-memory-summary");
 const imageUploadInput = document.getElementById("image-upload");
 const imageUploadLabel = document.querySelector('label[for="image-upload"]');
 const selectedMediaPreview = document.getElementById("selected-media-preview");
+const chatHomeActions = document.getElementById("chat-home-actions");
+const homeContinueBtn = document.getElementById("home-continue-btn");
+const homeNewChatBtn = document.getElementById("home-new-chat-btn");
 const chatHomeOptions = document.getElementById("chat-home-options");
 const memoryModal = document.getElementById("memory-modal");
 const memoryList = document.getElementById("memory-list");
@@ -34,8 +37,6 @@ const clearMemoryBtn = document.getElementById("clear-memory-btn");
 const settingsMemoryCount = document.getElementById("settings-memory-count");
 const settingsThemeBtn = document.getElementById("settings-theme-btn");
 const settingsThemeLabel = document.getElementById("settings-theme-label");
-const settingsResumeBtn = document.getElementById("settings-resume-btn");
-const settingsResumeLabel = document.getElementById("settings-resume-label");
 const documentContextBanner = document.getElementById("document-context-banner");
 const documentContextTitle = document.getElementById("document-context-title");
 const documentContextSubtitle = document.getElementById("document-context-subtitle");
@@ -53,13 +54,14 @@ const MAX_VISIBLE_PROMPT_OPTIONS = 4;
 const MEMORY_STORAGE_KEY = "genie_user_memories_v1";
 const DOCUMENT_STORAGE_KEY = "genie_active_document_v1";
 const PROMPT_PREFERENCES_STORAGE_KEY = "genie_prompt_preferences_v1";
-const RESUME_LAST_CHAT_STORAGE_KEY = "genie_resume_last_chat_v1";
+const LAST_OPEN_CHAT_STORAGE_KEY = "genie_lastOpenChatId";
 const DOCUMENT_MAX_CHUNKS = 5;
 const DOCUMENT_CHUNK_SIZE = 1200;
 const DOCUMENT_CHUNK_OVERLAP = 180;
 let userMemories = [];
 let activeDocumentContext = null;
 let activePromptGroup = "";
+let isHomePromptPickerVisible = false;
 
 const SUGGESTED_PROMPT_GROUPS = {
   summarize: [
@@ -255,10 +257,32 @@ function syncFreshChatLayout() {
     chatContainer.setAttribute("aria-hidden", String(!isFreshDraft));
   }
   if (isFreshDraft) {
-    renderPromptOptions(activePromptGroup || getDefaultPromptGroup());
+    updateHomeScreenState();
   } else {
     renderPromptOptions("");
   }
+}
+
+function updateHomeScreenState() {
+  const hasLastChat = !!readLastOpenedChatId();
+  if (homeContinueBtn) {
+    homeContinueBtn.hidden = !hasLastChat;
+  }
+  if (chatHomeActions) {
+    chatHomeActions.hidden = isHomePromptPickerVisible;
+  }
+  const promptCards = document.querySelector(".chat-home-prompts");
+  if (promptCards) {
+    promptCards.hidden = !isHomePromptPickerVisible;
+  }
+
+  if (!isHomePromptPickerVisible) {
+    renderPromptOptions("");
+    document.body.classList.remove("prompt-options-open");
+    return;
+  }
+
+  renderPromptOptions(activePromptGroup);
 }
 
 const SUPPORTED_MEDIA_MIME_TYPES = new Set([
@@ -461,24 +485,9 @@ function renderMemoryList() {
   updateMemorySettingsSummary();
 }
 
-function shouldResumeLastChat() {
-  try {
-    return localStorage.getItem(RESUME_LAST_CHAT_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function setResumeLastChatPreference(enabled) {
-  try {
-    localStorage.setItem(RESUME_LAST_CHAT_STORAGE_KEY, enabled ? "true" : "false");
-  } catch {}
-  updateMemorySettingsSummary();
-}
-
 function updateMemorySettingsSummary(memories = getMemories()) {
   if (sidebarMemorySummary) {
-    sidebarMemorySummary.textContent = "Theme, resume, and account";
+    sidebarMemorySummary.textContent = "Theme and account";
   }
   if (settingsThemeLabel) {
     settingsThemeLabel.textContent = document.body.classList.contains("light-mode")
@@ -497,25 +506,6 @@ function updateMemorySettingsSummary(memories = getMemories()) {
       document.body.classList.contains("light-mode")
         ? "Switch to dark mode"
         : "Switch to light mode",
-    );
-  }
-  if (settingsResumeLabel) {
-    settingsResumeLabel.textContent = shouldResumeLastChat()
-      ? "On on app start"
-      : "Off on app start";
-  }
-  const settingsResumeIcon = settingsResumeBtn?.querySelector(".material-symbols-outlined");
-  if (settingsResumeIcon) {
-    settingsResumeIcon.textContent = shouldResumeLastChat()
-      ? "history_toggle_off"
-      : "history";
-  }
-  if (settingsResumeBtn) {
-    settingsResumeBtn.setAttribute(
-      "aria-label",
-      shouldResumeLastChat()
-        ? "Disable resume last chat on app start"
-        : "Enable resume last chat on app start",
     );
   }
 }
@@ -540,10 +530,6 @@ function toggleThemePreference() {
     document.body.classList.contains("light-mode") ? "light" : "dark",
   );
   updateMemorySettingsSummary();
-}
-
-function toggleResumeLastChatPreference() {
-  setResumeLastChatPreference(!shouldResumeLastChat());
 }
 
 function normalizeTextForSearch(text) {
@@ -1345,12 +1331,25 @@ function readStoredActiveChatId() {
   }
 }
 
+function readLastOpenedChatId() {
+  try {
+    const stored = localStorage.getItem(LAST_OPEN_CHAT_STORAGE_KEY);
+    return isValidChatId(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 function persistActiveChatId(chatId) {
   const nextChatId = isValidChatId(chatId) ? String(chatId).trim() : null;
   activeChatId = nextChatId;
   try {
-    if (nextChatId) localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, nextChatId);
-    else localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+    if (nextChatId) {
+      localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, nextChatId);
+      localStorage.setItem(LAST_OPEN_CHAT_STORAGE_KEY, nextChatId);
+    } else {
+      localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+    }
   } catch {}
   return nextChatId;
 }
@@ -1645,19 +1644,12 @@ async function initializeApp() {
   // 5) Backend check
   testBackendConnection().catch(console.error);
 
-  // 6) Start fresh by default, or restore the last chat when the setting is enabled.
-  if (shouldResumeLastChat() && activeChatId) {
-    await ensureActiveChat({
-      createIfMissing: false,
-      loadMessages: true,
-      refreshSidebar: true,
-    });
-  } else {
-    persistActiveChatId(null);
-    resetChatDraftView();
-    await loadSessionsSidebar(true);
-    syncFreshChatLayout();
-  }
+  // 6) Always start on the fresh home screen.
+  isHomePromptPickerVisible = false;
+  persistActiveChatId(null);
+  resetChatDraftView();
+  await loadSessionsSidebar(true);
+  syncFreshChatLayout();
 
   console.log("App initialized");
 }
@@ -1710,14 +1702,9 @@ function initEventListeners() {
             renderMemoryList();
         });
     }
-    if (settingsThemeBtn) {
+  if (settingsThemeBtn) {
         settingsThemeBtn.addEventListener("click", () => {
             toggleThemePreference();
-        });
-    }
-    if (settingsResumeBtn) {
-        settingsResumeBtn.addEventListener("click", () => {
-            toggleResumeLastChatPreference();
         });
     }
     if (memoryModal) {
@@ -1725,6 +1712,25 @@ function initEventListeners() {
             if (e.target instanceof HTMLElement && e.target.dataset.closeMemory === "true") {
                 closeMemoryModal();
             }
+        });
+    }
+    if (homeNewChatBtn) {
+        homeNewChatBtn.addEventListener("click", () => {
+            activePromptGroup = "";
+            isHomePromptPickerVisible = true;
+            updateHomeScreenState();
+        });
+    }
+    if (homeContinueBtn) {
+        homeContinueBtn.addEventListener("click", async () => {
+            const lastChatId = readLastOpenedChatId();
+            if (!lastChatId) {
+                isHomePromptPickerVisible = true;
+                updateHomeScreenState();
+                return;
+            }
+            persistActiveChatId(lastChatId);
+            await openSession(lastChatId);
         });
     }
     if (clearDocumentBtn) {
@@ -1982,6 +1988,8 @@ async function startChat() {
 
 function resetChatDraftView() {
     persistActiveChatId(null);
+    activePromptGroup = "";
+    isHomePromptPickerVisible = false;
     conversationMemory = [];
     if (chatbox) {
         chatbox.innerHTML = "";
@@ -2035,6 +2043,7 @@ async function createNewChat() {
 
 async function openSession(chatId) {
     persistActiveChatId(chatId);
+    isHomePromptPickerVisible = false;
     await loadChatFromServer(chatId);
     await loadSessionsSidebar();
     syncFreshChatLayout();
