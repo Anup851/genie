@@ -1471,8 +1471,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initializeApp();
     markAppView();
     setupDownloadAppButton();
-    fixSidebarCloseButton();
-    setupWebViewCloseButton();
+    syncSidebarCloseButton();
   } finally {
     requestAnimationFrame(() => {
       revealAppShell();
@@ -3558,84 +3557,27 @@ function handleResize() {
     }
 }
 
-// ================= FIX SIDEBAR CLOSE BUTTON =================
-function fixSidebarCloseButton() {
-  const closeBtn = document.getElementById("close-sidebar");
+function closeHistorySidebar() {
   const sidebar = document.querySelector(".history-sidebar");
-  
-  if (!closeBtn) {
-    console.error("Close sidebar button not found");
-    return;
+  if (!sidebar) return;
+
+  sidebar.classList.remove("active");
+
+  if (window.innerWidth <= 480) {
+    sidebar.style.transform = "translateX(-100%)";
+    sidebar.style.display = "none";
   }
-  
-  if (!sidebar) {
-    console.error("History sidebar not found");
-    return;
-  }
-  
-  console.log("Found sidebar close button:", closeBtn);
-  
-  // Remove any existing event listeners by cloning
-  const newCloseBtn = closeBtn.cloneNode(true);
-  closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-  
-  // Add click event listener
-  newCloseBtn.addEventListener("click", function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log("Closing sidebar...");
-    
-    // Remove active class
-    sidebar.classList.remove("active");
-    
-    // On mobile, also hide with transform
-    if (window.innerWidth <= 480) {
-      sidebar.style.transform = "translateX(-100%)";
-    }
-    
-    console.log("Sidebar closed");
-  });
-  
-  // Also add event listener to the original sidebar reference
-  sidebar.addEventListener("click", function(e) {
-    if (e.target.id === "close-sidebar" || 
-        e.target.closest("#close-sidebar")) {
-      e.stopPropagation();
-      sidebar.classList.remove("active");
-      if (window.innerWidth <= 480) {
-        sidebar.style.transform = "translateX(-100%)";
-      }
-    }
-  });
 }
 
-// Run fix when page loads
-document.addEventListener("DOMContentLoaded", function() {
-  console.log("DOM loaded, fixing sidebar close button...");
-  setTimeout(fixSidebarCloseButton, 500); // Delay to ensure everything is loaded
-});
-
-// Also run fix when chat starts (if sidebar is dynamically shown)
-document.addEventListener("click", function(e) {
-  if (e.target.closest(".start-chat-btn")) {
-    setTimeout(fixSidebarCloseButton, 1000);
-  }
-});
-
-// ================= WEBVIEW FIX FOR SIDEBAR CLOSE BUTTON =================
-// ADD THIS AT THE VERY BOTTOM OF THE FILE
-
-// ================= WEBVIEW FIX FOR SIDEBAR CLOSE BUTTON =================
-
-function setupWebViewCloseButton() {
+function syncSidebarCloseButton() {
   const closeBtn = document.getElementById("close-sidebar");
   const sidebar = document.querySelector(".history-sidebar");
-  
+
   if (!closeBtn || !sidebar) {
     return;
   }
 
-  if (closeBtn.dataset.webviewBound === "true") {
+  if (closeBtn.dataset.sidebarBound === "true") {
     return;
   }
 
@@ -3645,30 +3587,30 @@ function setupWebViewCloseButton() {
       e.stopPropagation();
     }
 
-    sidebar.classList.remove("active");
-
-    if (window.innerWidth <= 480) {
-      sidebar.style.transform = "translateX(-100%)";
-      sidebar.style.display = "none";
-    }
-
+    closeHistorySidebar();
     return false;
   };
 
-  closeBtn.dataset.webviewBound = "true";
-}
+  closeBtn.dataset.sidebarBound = "true";
 
-// Run setup once plus a few delayed fallbacks for slow WebViews
-setupWebViewCloseButton();
-setTimeout(setupWebViewCloseButton, 500);
-setTimeout(setupWebViewCloseButton, 1000);
-setTimeout(setupWebViewCloseButton, 2000);
+  if (sidebar.dataset.sidebarBound === "true") {
+    return;
+  }
+
+  sidebar.addEventListener("click", (e) => {
+    if (e.target.id === "close-sidebar" || e.target.closest("#close-sidebar")) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeHistorySidebar();
+    }
+  });
+  sidebar.dataset.sidebarBound = "true";
+}
 
 // Re-run quietly only when the close button may have been re-rendered
 document.addEventListener("click", function(e) {
-  if (e.target.closest("#sidebar-toggle") || 
-      e.target.closest(".start-chat-btn")) {
-    setTimeout(setupWebViewCloseButton, 300);
+  if (e.target.closest("#sidebar-toggle") || e.target.closest(".start-chat-btn")) {
+    setTimeout(syncSidebarCloseButton, 300);
   }
 });
 
@@ -3687,10 +3629,7 @@ document.addEventListener("click", function(e) {
 
 // ---- Typing simulation helpers ----
 function escapeHTML(str = "") {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return escapeHtml(str);
 }
 
 function typeCharsInto(el, text, baseSpeed = 10, mode = "html") {
@@ -3894,8 +3833,6 @@ function setupDownloadAppButton() {
 // ================= END OF CODE =================
 
 
-console.log("Loaded from:", `${location.origin}${location.pathname}`);
-console.log("Script version: v16");
 
 
 
