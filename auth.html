@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genie Auth</title>
+    <link rel="icon" type="image/png" href="genie-logo.png" />
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
@@ -358,7 +359,7 @@
 
   <body>
     <div class="card fade-in" id="card">
-      <button id="close-auth-btn" class="close-auth" type="button" aria-label="Back to chat">×</button>
+      <button id="close-auth-btn" class="close-auth" type="button" aria-label="Back to chat">x</button>
 
       <h1 class="title">Genie</h1>
 
@@ -449,7 +450,6 @@
             autoRefreshToken: true,
             persistSession: true,
             detectSessionInUrl: true,
-            flowType: 'pkce', // Use PKCE flow for better webview compatibility
           },
         });
 
@@ -491,31 +491,21 @@
         }
 
         function getAppEntryUrl() {
-          // For OAuth callback, redirect back to auth.html so "already logged in" UI shows
-          // This keeps the user in auth flow until they explicitly proceed to chat
-          return new URL("./auth.html", window.location.href).toString();
+          // Send OAuth callback straight to app entry.
+          // This avoids extra auth-page hops and stale callback-state races.
+          return new URL("./index.html", window.location.href).toString();
+        }
+
+        function hasOAuthCallbackParams() {
+          const hash = String(window.location.hash || "");
+          const search = String(window.location.search || "");
+          return /access_token=|refresh_token=|code=|error=|error_code=/i.test(`${hash}${search}`);
         }
 
         function clearPersistedAuthState() {
           sessionStorage.removeItem("genie_post_login_redirect");
           sessionStorage.removeItem(REDIRECT_FLAG_KEY);
           localStorage.removeItem("genie_session_state");
-
-          try {
-            Object.keys(localStorage).forEach((key) => {
-              if (key.includes("supabase") || key.includes("sb-")) {
-                localStorage.removeItem(key);
-              }
-            });
-          } catch {}
-
-          try {
-            Object.keys(sessionStorage).forEach((key) => {
-              if (key.includes("supabase") || key.includes("sb-")) {
-                sessionStorage.removeItem(key);
-              }
-            });
-          } catch {}
 
           try {
             const cleanUrl = `${window.location.origin}${window.location.pathname}`;
@@ -566,15 +556,12 @@
           setGoogleButtonLoading(false);
         }
 
-        function saveSessionToStorage(session) {
+                function saveSessionToStorage(session) {
           if (session?.access_token && session?.user) {
-            localStorage.setItem('genie_session_state', JSON.stringify({
-              accessToken: session.access_token,
-              refreshToken: session.refresh_token,
-              user: session.user,
-              expiresAt: session.expires_at,
-            }));
-            console.log("✅ Session saved from auth.html");
+            // Supabase handles session persistence internally.
+            // Remove old app-specific storage so stale refresh tokens are never reused.
+            localStorage.removeItem("genie_session_state");
+            console.log("Session persisted by Supabase auth");
           }
         }
 
@@ -586,17 +573,14 @@
 
         googleLoginBtn.addEventListener("click", async () => {
           clearStatus();
-          showStatus("info", "Signing in with Google...");
+          showStatus("info", "Opening Google...");
           setGoogleButtonLoading(true);
           setPendingRedirect(true);
 
-          const { data, error } = await supabaseClient.auth.signInWithOAuth({
+          const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: "google",
             options: {
               redirectTo: getAppEntryUrl(),
-              // CRITICAL: Use skipBrowserRedirect to keep OAuth inside app/webview
-              // This prevents Chrome from opening
-              skipBrowserRedirect: true,
             },
           });
 
@@ -604,10 +588,9 @@
             setPendingRedirect(false);
             setGoogleButtonLoading(false);
             console.error("OAuth error:", error);
-            showStatus("error", error.message || "Google login failed. Please try again.");
+            showStatus("error", error.message || "Google sign-in failed. Please try again.");
           }
-          // With skipBrowserRedirect: true, Supabase opens Google consent in-app
-          // After user approves, onAuthStateChange fires and we save the session
+          // Browser will redirect to Google
         });
 
         logoutBtn.addEventListener("click", async () => {
@@ -733,6 +716,11 @@
           if (session?.user) {
             // Save session whenever auth state changes (including Google OAuth)
             saveSessionToStorage(session);
+            if (hasOAuthCallbackParams() || hasPendingRedirect()) {
+              setPendingRedirect(false);
+              window.location.replace("./index.html");
+              return;
+            }
             showLoggedInUI(session.user.email || "");
           } else {
             clearTransientAuthState();
@@ -755,6 +743,11 @@
           if (session) {
             // Save session found
             saveSessionToStorage(session);
+            if (hasOAuthCallbackParams() || hasPendingRedirect()) {
+              setPendingRedirect(false);
+              window.location.replace("./index.html");
+              return;
+            }
             showLoggedInUI(session.user?.email || "");
           } else {
             clearTransientAuthState();
@@ -765,3 +758,6 @@
     </script>
   </body>
 </html>
+
+
+
