@@ -586,16 +586,17 @@
 
         googleLoginBtn.addEventListener("click", async () => {
           clearStatus();
-          showStatus("info", "Opening Google...");
+          showStatus("info", "Signing in with Google...");
           setGoogleButtonLoading(true);
           setPendingRedirect(true);
 
-          const { error } = await supabaseClient.auth.signInWithOAuth({
+          const { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: "google",
             options: {
               redirectTo: getAppEntryUrl(),
-              // Ensure OAuth happens in the same context (app/webview) not separate browser
-              skipBrowserRedirect: false,
+              // CRITICAL: Use skipBrowserRedirect to keep OAuth inside app/webview
+              // This prevents Chrome from opening
+              skipBrowserRedirect: true,
             },
           });
 
@@ -605,6 +606,8 @@
             console.error("OAuth error:", error);
             showStatus("error", error.message || "Google login failed. Please try again.");
           }
+          // With skipBrowserRedirect: true, Supabase opens Google consent in-app
+          // After user approves, onAuthStateChange fires and we save the session
         });
 
         logoutBtn.addEventListener("click", async () => {
