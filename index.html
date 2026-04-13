@@ -192,6 +192,14 @@
             <p class="chat-home-subtitle">
               Ask, code, learn, and generate with Genie.
             </p>
+            <div class="chat-home-actions" id="chat-home-actions">
+              <button id="home-continue-btn" class="chat-home-action-btn" type="button" hidden>
+                Continue where you left off
+              </button>
+              <button id="home-new-chat-btn" class="chat-home-action-btn chat-home-action-btn--primary" type="button">
+                Start new chat
+              </button>
+            </div>
             <div class="chat-home-prompts" aria-label="Suggested prompts">
               <button
                 class="chat-home-prompt"
@@ -325,13 +333,6 @@
             <span class="settings-theme-copy">
               <strong>Appearance</strong>
               <small id="settings-theme-label">Dark mode</small>
-            </span>
-          </button>
-          <button id="settings-resume-btn" class="settings-resume-btn" type="button">
-            <span class="material-symbols-outlined">history</span>
-            <span class="settings-theme-copy">
-              <strong>Resume chat</strong>
-              <small id="settings-resume-label">Off on app start</small>
             </span>
           </button>
           <button id="auth-btn" class="settings-auth-btn" type="button">
