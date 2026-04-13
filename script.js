@@ -28,7 +28,6 @@ const imageUploadLabel = document.querySelector('label[for="image-upload"]');
 const selectedMediaPreview = document.getElementById("selected-media-preview");
 const chatHomeActions = document.getElementById("chat-home-actions");
 const homeContinueBtn = document.getElementById("home-continue-btn");
-const homeNewChatBtn = document.getElementById("home-new-chat-btn");
 const chatHomeOptions = document.getElementById("chat-home-options");
 const memoryModal = document.getElementById("memory-modal");
 const memoryList = document.getElementById("memory-list");
@@ -61,7 +60,6 @@ const DOCUMENT_CHUNK_OVERLAP = 180;
 let userMemories = [];
 let activeDocumentContext = null;
 let activePromptGroup = "";
-let isHomePromptPickerVisible = false;
 
 const SUGGESTED_PROMPT_GROUPS = {
   summarize: [
@@ -269,20 +267,8 @@ function updateHomeScreenState() {
     homeContinueBtn.hidden = !hasLastChat;
   }
   if (chatHomeActions) {
-    chatHomeActions.hidden = isHomePromptPickerVisible;
+    chatHomeActions.hidden = !hasLastChat;
   }
-  const promptCards = document.querySelector(".chat-home-prompts");
-  if (promptCards) {
-    promptCards.hidden = !isHomePromptPickerVisible;
-  }
-
-  if (!isHomePromptPickerVisible) {
-    renderPromptOptions("");
-    document.body.classList.remove("prompt-options-open");
-    return;
-  }
-
-  renderPromptOptions(activePromptGroup);
 }
 
 const SUPPORTED_MEDIA_MIME_TYPES = new Set([
@@ -1645,7 +1631,6 @@ async function initializeApp() {
   testBackendConnection().catch(console.error);
 
   // 6) Always start on the fresh home screen.
-  isHomePromptPickerVisible = false;
   persistActiveChatId(null);
   resetChatDraftView();
   await loadSessionsSidebar(true);
@@ -1714,19 +1699,10 @@ function initEventListeners() {
             }
         });
     }
-    if (homeNewChatBtn) {
-        homeNewChatBtn.addEventListener("click", () => {
-            activePromptGroup = "";
-            isHomePromptPickerVisible = true;
-            updateHomeScreenState();
-        });
-    }
     if (homeContinueBtn) {
         homeContinueBtn.addEventListener("click", async () => {
             const lastChatId = readLastOpenedChatId();
             if (!lastChatId) {
-                isHomePromptPickerVisible = true;
-                updateHomeScreenState();
                 return;
             }
             persistActiveChatId(lastChatId);
@@ -1989,7 +1965,6 @@ async function startChat() {
 function resetChatDraftView() {
     persistActiveChatId(null);
     activePromptGroup = "";
-    isHomePromptPickerVisible = false;
     conversationMemory = [];
     if (chatbox) {
         chatbox.innerHTML = "";
@@ -2043,7 +2018,6 @@ async function createNewChat() {
 
 async function openSession(chatId) {
     persistActiveChatId(chatId);
-    isHomePromptPickerVisible = false;
     await loadChatFromServer(chatId);
     await loadSessionsSidebar();
     syncFreshChatLayout();
