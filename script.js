@@ -995,6 +995,7 @@ async function handleLogout() {
     // Clear local data
     localStorage.removeItem('genie_guest_id');
     localStorage.removeItem('genie_activeChatId');
+    localStorage.removeItem('genie_session_state');
     
     // Clear Supabase session data
     Object.keys(localStorage).forEach(key => {
