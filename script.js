@@ -886,7 +886,7 @@ async function updateAuthButton() {
 
   if (newBtn.tagName === "BUTTON") newBtn.type = "button";
 
-  const session = await getSession();
+  const session = await recoverAuthSession();
 
   if (session) {
     const userEmail = session.user?.email || "User";
@@ -1180,7 +1180,16 @@ async function recoverAuthSession() {
     console.warn("Initial session read failed:", error);
   }
 
-  if (hasOAuthCallbackParams()) {
+  const hasCallbackParams = hasOAuthCallbackParams();
+  const hydratedSession = await waitForSupabaseSession(
+    hasCallbackParams ? 8000 : 2500,
+    200
+  );
+  if (hydratedSession?.access_token) {
+    return hydratedSession;
+  }
+
+  if (hasCallbackParams) {
     const callbackSession = await waitForSupabaseSession();
     if (callbackSession?.access_token) {
       return callbackSession;
