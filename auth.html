@@ -486,7 +486,9 @@
         }
 
         function getAppEntryUrl() {
-          return new URL("./index.html", window.location.href).toString();
+          // For OAuth callback, redirect back to auth.html so "already logged in" UI shows
+          // This keeps the user in auth flow until they explicitly proceed to chat
+          return new URL("./auth.html", window.location.href).toString();
         }
 
         function clearPersistedAuthState() {
@@ -566,22 +568,24 @@
 
         googleLoginBtn.addEventListener("click", async () => {
           clearStatus();
-          showStatus("info", "Redirecting to Google...");
+          showStatus("info", "Opening Google...");
           setGoogleButtonLoading(true);
-          sessionStorage.setItem("genie_post_login_redirect", getAppEntryUrl());
-          setPendingRedirect(false);
+          setPendingRedirect(true);
 
           const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: "google",
             options: {
               redirectTo: getAppEntryUrl(),
+              // Ensure OAuth happens in the same context (app/webview) not separate browser
+              skipBrowserRedirect: false,
             },
           });
 
           if (error) {
             setPendingRedirect(false);
             setGoogleButtonLoading(false);
-            showStatus("error", error.message);
+            console.error("OAuth error:", error);
+            showStatus("error", error.message || "Google login failed. Please try again.");
           }
         });
 
