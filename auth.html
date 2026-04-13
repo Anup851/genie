@@ -490,9 +490,18 @@
           googleLoginBtn.innerHTML = isLoading ? "<span>Please wait...</span>" : GOOGLE_BUTTON_HTML;
         }
 
+        function isAndroidWebView() {
+          const ua = String(navigator.userAgent || "");
+          return /android/i.test(ua) && (/; wv\)/i.test(ua) || /version\/[\d.]+ chrome\/[\d.]+ mobile/i.test(ua));
+        }
+
         function getAppEntryUrl() {
-          // Send OAuth callback straight to app entry.
-          // This avoids extra auth-page hops and stale callback-state races.
+          if (isAndroidWebView()) {
+            // Deep-link callback for Android app builds.
+            return "genie://callback";
+          }
+
+          // Browser fallback for normal web usage.
           return new URL("./index.html", window.location.href).toString();
         }
 
@@ -718,7 +727,7 @@
             saveSessionToStorage(session);
             if (hasOAuthCallbackParams() || hasPendingRedirect()) {
               setPendingRedirect(false);
-              window.location.replace("./index.html");
+              window.location.replace(getAppEntryUrl());
               return;
             }
             showLoggedInUI(session.user.email || "");
@@ -745,7 +754,7 @@
             saveSessionToStorage(session);
             if (hasOAuthCallbackParams() || hasPendingRedirect()) {
               setPendingRedirect(false);
-              window.location.replace("./index.html");
+              window.location.replace(getAppEntryUrl());
               return;
             }
             showLoggedInUI(session.user?.email || "");
