@@ -1412,10 +1412,10 @@ async function initializeApp() {
   // 2) Recover auth after long idle before checking the current user
   await recoverAuthSession();
   const userId = await getUserId();
-  if (!userId) {
-    console.warn("No authenticated session found. Redirecting to auth page...");
-    window.location.href = "./auth.html";
-    return;
+  if (userId) {
+    console.log("User logged in:", userId);
+  } else {
+    console.log("Running in guest mode");
   }
   console.log("ðŸ‘¤ User ID:", userId);
 
@@ -3792,8 +3792,8 @@ function setupDownloadAppButton() {
 
   btn.addEventListener("click", (e) => {
     e.preventDefault();
-    // GitHub release link works great with direct navigation
-    window.location.href = APK_URL;
+    // Open browser with APK link in new tab/window
+    window.open(APK_URL, "_blank");
   });
 }
 
