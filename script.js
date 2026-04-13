@@ -798,50 +798,10 @@ const supabaseClient = window.supabaseClient || null;
 // small helper to avoid crashes
 function ensureSupabase() {
   if (!supabaseClient) {
-    console.warn("âŒ supabaseClient not found. Did you init it in index.html?");
+    console.warn("supabaseClient not found. Did you init it in index.html?");
     return false;
   }
   return true;
-}
-
-function saveSessionState(session) {
-  if (session?.access_token) {
-    localStorage.setItem('genie_session_state', JSON.stringify({
-      accessToken: session.access_token,
-      refreshToken: session.refresh_token,
-      user: session.user,
-      expiresAt: session.expires_at,
-    }));
-    console.log("Session saved for app reopen");
-  }
-}
-
-async function recoverPersistedSession() {
-  try {
-    const saved = localStorage.getItem('genie_session_state');
-    if (!saved) return null;
-    
-    console.log("Attempting to recover persisted session from localStorage...");
-    
-    if (supabaseClient && saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.refreshToken) {
-        const { data, error } = await supabaseClient.auth.refreshSession({
-          refresh_token: parsed.refreshToken,
-        });
-        
-        if (!error && data?.session) {
-          console.log("Session successfully refreshed from persisted token");
-          saveSessionState(data.session);
-          return data.session;
-        }
-      }
-    }
-    return null;
-  } catch (error) {
-    console.warn("Failed to recover persisted session:", error);
-    return null;
-  }
 }
 
 function hasOAuthCallbackParams() {
@@ -850,10 +810,79 @@ function hasOAuthCallbackParams() {
   return /access_token=|refresh_token=|code=|error=|error_code=/i.test(`${hash}${search}`);
 }
 
+const OAUTH_SESSION_SETTLE_MS = 10000;
+let oauthSessionSettlingUntil = hasOAuthCallbackParams()
+  ? Date.now() + OAUTH_SESSION_SETTLE_MS
+  : 0;
+
+function markOAuthSessionSettling(durationMs = OAUTH_SESSION_SETTLE_MS) {
+  oauthSessionSettlingUntil = Date.now() + Math.max(500, durationMs);
+}
+
+function isOAuthSessionSettling() {
+  return hasOAuthCallbackParams() || Date.now() < oauthSessionSettlingUntil;
+}
+
 function clearOAuthCallbackUrl() {
   const cleanUrl = `${window.location.origin}${window.location.pathname}`;
   window.history.replaceState({}, document.title, cleanUrl);
 }
+
+function clearLegacySessionState() {
+  try {
+    localStorage.removeItem("genie_session_state");
+  } catch {}
+}
+
+function isInvalidRefreshTokenError(error) {
+  const message = getAuthErrorText(error);
+  return (
+    message.includes("invalid refresh token") ||
+    message.includes("refresh token not found")
+  );
+}
+
+function isMissingAuthSessionError(error) {
+  const message = getAuthErrorText(error);
+  const name = String(error?.name || error?.error || "").toLowerCase();
+  return (
+    name.includes("authsessionmissingerror") ||
+    message.includes("auth session missing")
+  );
+}
+
+function getAuthErrorText(error) {
+  const parts = [
+    error?.name,
+    error?.message,
+    error?.error,
+    error?.error_description,
+    error?.msg,
+    error?.cause?.name,
+    error?.cause?.message,
+    error?.cause?.error,
+    error?.cause?.error_description,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  if (parts.length) return parts.join(" | ");
+  return String(error || "").toLowerCase();
+}
+
+function isExpectedSupabaseAuthError(error) {
+  const text = getAuthErrorText(error);
+  return (
+    isMissingAuthSessionError(error) ||
+    isInvalidRefreshTokenError(error) ||
+    text.includes("invalid_grant") ||
+    text.includes("token has expired") ||
+    text.includes("session_not_found") ||
+    text.includes("refresh_token_not_found")
+  );
+}
+
+let authRecoveryPromise = null;
 
 async function waitForSupabaseSession(timeoutMs = 8000, intervalMs = 200) {
   if (!ensureSupabase()) return null;
@@ -867,7 +896,9 @@ async function waitForSupabaseSession(timeoutMs = 8000, intervalMs = 200) {
         return session;
       }
     } catch (error) {
-      console.warn("Waiting for OAuth session failed:", error);
+      if (!isExpectedSupabaseAuthError(error)) {
+        console.warn("Waiting for OAuth session failed:", error);
+      }
     }
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -892,17 +923,8 @@ async function getSession() {
 
 // âœ… SINGLE getUserId function (KEEP THIS ONE, DELETE THE OTHER)
 async function getUserId() {
-  // Use only authenticated Supabase user
-  let user = await getCurrentUser();
-  if (!user) {
-    await recoverAuthSession();
-    user = await getCurrentUser();
-  }
-  if (user) {
-    return user.id;
-  }
-
-  return null;
+  const user = await getCurrentUser();
+  return user?.id || null;
 }
 
 // Update auth button based on login status
@@ -914,9 +936,6 @@ async function getUserId() {
 // ================= COMPLETE AUTH SYSTEM WITH LOGOUT =================
 
 // Update auth button based on login status
-// ================= COMPLETE AUTH SYSTEM WITH NO REFRESH =================
-
-// Update auth button based on login status
 async function updateAuthButton() {
   const authBtn = document.getElementById("auth-btn");
   if (!authBtn) return;
@@ -926,7 +945,12 @@ async function updateAuthButton() {
 
   if (newBtn.tagName === "BUTTON") newBtn.type = "button";
 
-  const session = await recoverAuthSession();
+  let session = null;
+  try {
+    session = await recoverAuthSession();
+  } catch (error) {
+    console.warn("Error recovering session in updateAuthButton:", error);
+  }
 
   if (session) {
     const userEmail = session.user?.email || "User";
@@ -962,7 +986,11 @@ async function updateAuthButton() {
     });
   }
 
-  await syncMicAuthState();
+  try {
+    await syncMicAuthState();
+  } catch (error) {
+    console.warn("Error syncing mic auth state:", error);
+  }
 }
 
 // Delegated fallback: always open auth page when auth button is clicked.
@@ -978,7 +1006,7 @@ document.addEventListener("click", (e) => {
 // Handle logout process
 async function handleLogout() {
   try {
-    console.log('ðŸšª Logging out...');
+    console.log('Logging out...');
     
     // Show loading state
     const authBtn = document.getElementById('auth-btn');
@@ -992,17 +1020,10 @@ async function handleLogout() {
 
     if (error) throw error;
     
-    // Clear local data
-    localStorage.removeItem('genie_guest_id');
+    // Clear app-local data only.
+    // Let Supabase manage its own auth storage keys to avoid desync.
     localStorage.removeItem('genie_activeChatId');
-    localStorage.removeItem('genie_session_state');
-    
-    // Clear Supabase session data
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes('supabase') || key.includes('sb-')) {
-        localStorage.removeItem(key);
-      }
-    });
+    clearLegacySessionState();
     
     // Reset UI but keep main chat layout (no welcome flow)
     if (chatbox) chatbox.innerHTML = '';
@@ -1015,11 +1036,11 @@ async function handleLogout() {
     await updateAuthButton();
     
     // Show success message
-    alert('âœ… Logged out successfully!');
+    alert('Logged out successfully!');
     
   } catch (error) {
-    console.error('âŒ Logout error:', error);
-    alert('âŒ Failed to logout');
+    console.error('Logout error:', error);
+    alert('Failed to logout');
     await updateAuthButton();
   }
 }
@@ -1212,57 +1233,68 @@ function persistActiveChatId(chatId) {
 }
 
 async function recoverAuthSession() {
+  if (authRecoveryPromise) return authRecoveryPromise;
+
+  authRecoveryPromise = (async () => {
   if (!ensureSupabase()) return null;
 
   try {
     const session = await getSession();
-    if (session?.access_token) {
-      saveSessionState(session);
-      return session;
-    }
+    if (session?.access_token) return session;
   } catch (error) {
-    console.warn("Initial session read failed:", error);
+    if (!isExpectedSupabaseAuthError(error)) {
+      console.warn("Initial session read failed:", error);
+    }
   }
 
-  // Try to recover from persisted session first
-  const persistedSession = await recoverPersistedSession();
-  if (persistedSession?.access_token) {
-    return persistedSession;
-  }
-
-  const hasCallbackParams = hasOAuthCallbackParams();
-  const hydratedSession = await waitForSupabaseSession(
-    hasCallbackParams ? 8000 : 2500,
-    200
-  );
-  if (hydratedSession?.access_token) {
-    saveSessionState(hydratedSession);
-    return hydratedSession;
-  }
-
-  if (hasCallbackParams) {
+  // If OAuth callback is in progress, wait for it to be processed
+  if (hasOAuthCallbackParams()) {
+    markOAuthSessionSettling();
+    console.log("OAuth callback detected, recovering session...");
     const callbackSession = await waitForSupabaseSession();
+    // Always clean URL so one-time tokens are not reused on next reload.
+    clearOAuthCallbackUrl();
     if (callbackSession?.access_token) {
+      markOAuthSessionSettling(2500);
       return callbackSession;
     }
+    clearLegacySessionState();
+    return null;
+  }
+
+  // During OAuth settle window, avoid forcing refresh/recovery paths.
+  if (isOAuthSessionSettling()) {
+    return null;
   }
 
   try {
-    const { data, error } = await supabaseClient.auth.refreshSession();
+    const { data, error } = await supabaseClient.auth.getSession();
     if (error) throw error;
-    if (data?.session?.access_token && hasOAuthCallbackParams()) {
-      clearOAuthCallbackUrl();
-    }
     return data?.session || null;
   } catch (error) {
+    if (isExpectedSupabaseAuthError(error)) {
+      clearLegacySessionState();
+      return null;
+    }
     console.warn("Session recovery failed:", error);
     return null;
+  }
+  })();
+
+  try {
+    return await authRecoveryPromise;
+  } finally {
+    authRecoveryPromise = null;
   }
 }
 
 async function apiFetch(url, options = {}) {
-  const session = await recoverAuthSession();
-  const accessToken = session?.access_token;
+  let session = await recoverAuthSession();
+  let accessToken = session?.access_token;
+  if (!accessToken && isOAuthSessionSettling()) {
+    session = await waitForSupabaseSession(3000, 200);
+    accessToken = session?.access_token;
+  }
   if (!accessToken) {
     window.location.href = "./auth.html";
     throw new Error("Not authenticated");
@@ -1279,6 +1311,9 @@ async function apiFetch(url, options = {}) {
   }
 
   try {
+    if (isOAuthSessionSettling()) {
+      return response;
+    }
     const { data, error } = await supabaseClient.auth.refreshSession();
     const refreshedToken = data?.session?.access_token;
     if (error || !refreshedToken) {
@@ -1297,6 +1332,12 @@ async function apiFetch(url, options = {}) {
       return response;
     }
   } catch (error) {
+    if (isMissingAuthSessionError(error)) {
+      return response;
+    }
+    if (isInvalidRefreshTokenError(error)) {
+      clearLegacySessionState();
+    }
     console.warn("Session refresh failed after 401:", error);
   }
 
@@ -1411,40 +1452,16 @@ function setComposerBusy(isBusy) {
   }
 }
 
-// Check if we're returning from OAuth callback - if so, go back to auth.html to show "already logged in" UI
-async function handleOAuthCallback() {
-  if (!hasOAuthCallbackParams()) return;
-  
-  console.log("📱 OAuth callback detected, recovering session...");
-  const session = await recoverAuthSession();
-  
-  if (session?.access_token) {
-    console.log("✅ OAuth session recovered, redirecting to auth page to show logged-in UI...");
-    // Clear URL params and redirect to auth.html
-    window.location.href = "./auth.html";
-  }
-}
-
 // ================= INITIALIZATION =================
 // âœ… SINGLE DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log("ðŸš€ Initializing app...");
+  console.log("Initializing app...");
 
   try {
-    // IMPORTANT: Check for OAuth callback FIRST
-    // If returning from Google login, redirect to auth.html to show "already logged in" UI
-    await handleOAuthCallback();
-    
     // Update auth button first
     await updateAuthButton();
     if (supabaseClient?.auth?.onAuthStateChange) {
-      supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        // Save session whenever auth state changes
-        if (session?.access_token) {
-          saveSessionState(session);
-        } else if (event === 'SIGNED_OUT') {
-          localStorage.removeItem('genie_session_state');
-        }
+      supabaseClient.auth.onAuthStateChange(async () => {
         await updateAuthButton();
         await syncMicAuthState();
       });
@@ -1472,27 +1489,27 @@ function markAppView() {
   
   if (isWebView) {
     document.body.classList.add("app-view");
-    console.log("ðŸ“± App view detected");
+    console.log("App view detected");
   }
 }
 
 async function initializeApp() {
-  console.log("ðŸš€ Initializing app...");
+  console.log("Initializing app...");
 
   // 1) Start directly on main chat page
   initUIState();
   loadMemories();
   loadActiveDocument();
 
-  // 2) Recover auth after long idle before checking the current user
-  await recoverAuthSession();
-  const userId = await getUserId();
-  if (userId) {
-    console.log("User logged in:", userId);
-  } else {
-    console.log("Running in guest mode");
+  // 2) Recover auth once, then read user from recovered session/current auth state
+  const recoveredSession = await recoverAuthSession();
+  const userId = recoveredSession?.user?.id || (await getUserId());
+  if (!userId) {
+    console.warn("No authenticated session found. Redirecting to auth page...");
+    window.location.href = "./auth.html";
+    return;
   }
-  console.log("ðŸ‘¤ User ID:", userId);
+  console.log("User ID:", userId);
 
   // 3) Theme + speech + mic
   initTheme();
@@ -1512,7 +1529,7 @@ async function initializeApp() {
     loadMessages: !!activeChatId,
   });
 
-  console.log("âœ… App initialized");
+  console.log("App initialized");
 }
 // ================= CORE FUNCTIONS =================
 
@@ -1647,7 +1664,7 @@ function initEventListeners() {
             console.log("ðŸ“± Sidebar toggle clicked");
             
             if (!historySidebar) {
-                console.error("âŒ History sidebar not found!");
+                console.error("History sidebar not found");
                 return;
             }
             
@@ -1922,7 +1939,7 @@ async function saveSessionTitle(chatId, title) {
         });
         return resp.ok;
     } catch (error) {
-        console.error("❌ Error renaming session:", error);
+        console.error("? Error renaming session:", error);
         return false;
     }
 }
@@ -2076,7 +2093,7 @@ async function loadSessionsSidebar(force = false) {
             lastSessionsSidebarSnapshot = snapshot;
             renderSessionsSidebar(sessions);
         } catch (error) {
-            console.error("âŒ Error loading sessions:", error);
+            console.error("Error loading sessions:", error);
             const errorLi = document.createElement("li");
             errorLi.className = "error";
             errorLi.textContent = isOfflineLikeError(error)
@@ -2135,7 +2152,7 @@ async function loadChatFromServer(chatId) {
         chatbox.scrollTo(0, chatbox.scrollHeight);
         syncFreshChatLayout();
     } catch (error) {
-        console.error("âŒ Error loading chat:", error);
+        console.error("Error loading chat:", error);
         const looksRecoverable =
             error?.name === "TypeError" ||
             /network|fetch|load chat/i.test(String(error?.message || ""));
@@ -2182,7 +2199,7 @@ async function deleteSession(chatId) {
             await loadSessionsSidebar();
         }
     } catch (error) {
-        console.error("âŒ Error deleting session:", error);
+        console.error("Error deleting session:", error);
     }
 }
 
@@ -2200,7 +2217,7 @@ async function deleteAllChats() {
         resetChatDraftView();
         await loadSessionsSidebar();
     } catch (error) {
-        console.error("âŒ Error deleting all chats:", error);
+        console.error("Error deleting all chats:", error);
     }
 }
 
@@ -2602,7 +2619,7 @@ async function handleSpecialCommands(messageElement, userMessage) {
         const cityName = weatherData.name;
         const country = weatherData.sys.country;
         
-        const weatherReply = `🌤️ Weather in ${cityName}, ${country}:
+        const weatherReply = `Weather in ${cityName}, ${country}:
 Temperature: ${temp}°C (feels like ${feels_like}°C)
 Condition: ${description}
 Humidity: ${humidity}%
@@ -2642,7 +2659,7 @@ async function persistManualExchange(userMessage, assistantReply) {
 
 function isWeatherReplyText(text) {
     const t = String(text || "");
-    return /^🌤️\s*Weather in .+:/m.test(t) && /Temperature:/i.test(t);
+    return /Weather in .+:/i.test(t) && /Temperature:/i.test(t);
 }
 
 function renderAssistantMessage(contentElement, messageText) {
@@ -3506,15 +3523,15 @@ async function testBackendConnection() {
         const response = await fetch(`${BACKEND_URL}/api/health`);
 
         if (response.ok) {
-            console.log("âœ… Backend is reachable");
+            console.log("Backend is reachable");
             hideNetworkBanner();
             return true;
         } else {
-            console.error("âŒ Backend error:", response.status);
+            console.error("Backend error:", response.status);
             return false;
         }
     } catch (error) {
-        console.error("âŒ Cannot reach backend:", error);
+        console.error("Cannot reach backend:", error);
         if (isOfflineLikeError(error)) {
             showNetworkBanner("Internet is down. Please reconnect and refresh or try again.");
         }
@@ -3547,16 +3564,16 @@ function fixSidebarCloseButton() {
   const sidebar = document.querySelector(".history-sidebar");
   
   if (!closeBtn) {
-    console.error("âŒ Close sidebar button not found!");
+    console.error("Close sidebar button not found");
     return;
   }
   
   if (!sidebar) {
-    console.error("âŒ History sidebar not found!");
+    console.error("History sidebar not found");
     return;
   }
   
-  console.log("âœ… Found sidebar close button:", closeBtn);
+  console.log("Found sidebar close button:", closeBtn);
   
   // Remove any existing event listeners by cloning
   const newCloseBtn = closeBtn.cloneNode(true);
@@ -3566,7 +3583,7 @@ function fixSidebarCloseButton() {
   newCloseBtn.addEventListener("click", function(e) {
     e.preventDefault();
     e.stopPropagation();
-    console.log("ðŸŸ¡ Closing sidebar...");
+    console.log("Closing sidebar...");
     
     // Remove active class
     sidebar.classList.remove("active");
@@ -3576,7 +3593,7 @@ function fixSidebarCloseButton() {
       sidebar.style.transform = "translateX(-100%)";
     }
     
-    console.log("âœ… Sidebar closed");
+    console.log("Sidebar closed");
   });
   
   // Also add event listener to the original sidebar reference
@@ -3594,7 +3611,7 @@ function fixSidebarCloseButton() {
 
 // Run fix when page loads
 document.addEventListener("DOMContentLoaded", function() {
-  console.log("ðŸš€ DOM loaded, fixing sidebar close button...");
+  console.log("DOM loaded, fixing sidebar close button...");
   setTimeout(fixSidebarCloseButton, 500); // Delay to ensure everything is loaded
 });
 
@@ -3867,8 +3884,8 @@ function setupDownloadAppButton() {
 
   btn.addEventListener("click", (e) => {
     e.preventDefault();
-    // Open browser with APK link in new tab/window
-    window.open(APK_URL, "_blank");
+    // GitHub release link works great with direct navigation
+    window.location.href = APK_URL;
   });
 }
 
@@ -3877,6 +3894,9 @@ function setupDownloadAppButton() {
 // ================= END OF CODE =================
 
 
-console.log("Loaded from:", location.href);
-console.log("Script version: v12");
+console.log("Loaded from:", `${location.origin}${location.pathname}`);
+console.log("Script version: v16");
+
+
+
 
