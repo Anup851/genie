@@ -5,11 +5,9 @@
 
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' 'unsafe-inline' 'unsafe-eval' *; img-src 'self' data: blob: *; style-src 'self' 'unsafe-inline' *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *; worker-src 'self' blob: https: data:;"
-    />
+      content="default-src 'self' 'unsafe-inline' 'unsafe-eval' *; img-src 'self' data: blob: *; style-src 'self' 'unsafe-inline' *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *;"
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chatbot</title>
 
     <link rel="stylesheet" href="style.css" />
@@ -26,6 +24,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css"
     />
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
     <script>
       window.pdfjsLibReady = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs")
         .then((pdfjsLib) => {
@@ -69,6 +68,7 @@
             autoRefreshToken: true,
             persistSession: true,
             detectSessionInUrl: true,
+            flowType: 'pkce', // Use PKCE flow for webview/app compatibility
           },
         }
       );
@@ -82,23 +82,15 @@
 
   <body class="in-app ui-loading">
     <div class="app-shell-loader" id="app-shell-loader" aria-hidden="true">
-      <div class="app-shell-loader__brand">
+      <div class="app-shell-loader__panel">
         <img class="app-shell-loader__logo" src="genie-logo.png" alt="Genie logo" />
-        <strong class="app-shell-loader__title" aria-label="Genie">
-          <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>
-        </strong>
+        <div class="app-shell-loader__copy">
+          <strong>Genie is getting ready</strong>
+          <span>Loading chat, memory, and your workspace...</span>
+        </div>
       </div>
     </div>
-    <!-- <div class="welcome">
-      <h1 class="welcomes">
-        <span>G</span><span>e</span><span>n</span><span>i</span><span>e</span>
-      </h1>
-      <p>Click here to start a conversation</p>
-      <div class="welcome-actions">
-        <button class="start-chat-btn" type="button">Chat with Genie</button>
-        <a id="download-app-btn" class="download-app-btn" href="#">Download App</a>
-      </div>
-    </div> -->
+    
 
     <!-- Sidebar for chat history -->
     <div class="history-sidebar">
@@ -135,7 +127,7 @@
           <span class="material-symbols-outlined">settings</span>
           <span class="sidebar-settings-copy">
             <strong>Settings</strong>
-            <small id="sidebar-memory-summary">Theme and account</small>
+            <small id="sidebar-memory-summary">Memory ready</small>
           </span>
         </button>
       </div>
@@ -159,6 +151,11 @@
 
           <!-- CENTER -->
           <h2 class="chat-title">
+            <img
+              class="chat-title-logo"
+              src="genie-logo.png"
+              alt="Genie logo"
+            />
             <span class="chat-title-text">Genie</span>
           </h2>
 
@@ -189,55 +186,9 @@
           <div class="chat-home">
             <h3 class="chat-home-title">What can I help with today?</h3>
             <p class="chat-home-subtitle">
-              Ask, code, learn, and generate with Genie.
+              GENIE 
+
             </p>
-            <div class="chat-home-prompts" aria-label="Suggested prompts">
-              <button
-                class="chat-home-prompt"
-                type="button"
-                data-group="summarize"
-              >
-                <span class="chat-home-prompt__icon material-symbols-outlined">article</span>
-                <span class="chat-home-prompt__copy">
-                  <span class="chat-home-prompt__title">Summarize</span>
-                  <span class="chat-home-prompt__desc">Turn long content into quick notes.</span>
-                </span>
-              </button>
-              <button
-                class="chat-home-prompt"
-                type="button"
-                data-group="code"
-              >
-                <span class="chat-home-prompt__icon material-symbols-outlined">code</span>
-                <span class="chat-home-prompt__copy">
-                  <span class="chat-home-prompt__title">Code</span>
-                  <span class="chat-home-prompt__desc">Generate practical code with explanation.</span>
-                </span>
-              </button>
-              <button
-                class="chat-home-prompt"
-                type="button"
-                data-group="brainstorm"
-              >
-                <span class="chat-home-prompt__icon material-symbols-outlined">emoji_objects</span>
-                <span class="chat-home-prompt__copy">
-                  <span class="chat-home-prompt__title">Brainstorm</span>
-                  <span class="chat-home-prompt__desc">Get fast suggestions to start from.</span>
-                </span>
-              </button>
-              <button
-                class="chat-home-prompt"
-                type="button"
-                data-group="plan"
-              >
-                <span class="chat-home-prompt__icon material-symbols-outlined">route</span>
-                <span class="chat-home-prompt__copy">
-                  <span class="chat-home-prompt__title">Make a plan</span>
-                  <span class="chat-home-prompt__desc">Break work into clear next steps.</span>
-                </span>
-              </button>
-            </div>
-            <div class="chat-home-options" id="chat-home-options" hidden></div>
           </div>
         </div>
 
@@ -312,13 +263,20 @@
         <div class="memory-modal-header">
           <div>
             <h3 id="memory-modal-title">Genie Settings</h3>
-            <p>Manage quick app preferences in one place.</p>
+            <p>Manage memory and quick app preferences in one place.</p>
           </div>
           <button id="close-memory-btn" class="material-symbols-outlined memory-close-btn" type="button">
             close
           </button>
         </div>
         <div class="settings-overview-grid">
+          <div class="settings-stat-card">
+            <span class="material-symbols-outlined">neurology</span>
+            <div>
+              <strong id="settings-memory-count">0 saved items</strong>
+              <p>Genie uses memory to personalize replies.</p>
+            </div>
+          </div>
           <button id="settings-theme-btn" class="settings-theme-btn" type="button">
             <span class="material-symbols-outlined">dark_mode</span>
             <span class="settings-theme-copy">
@@ -333,6 +291,16 @@
               <small class="auth-subtext">Sign in or manage account</small>
             </span>
           </button>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-head">
+            <h4>Saved Memory</h4>
+            <span class="settings-section-note">Simple facts Genie remembers for future chats.</span>
+          </div>
+          <div id="memory-list" class="memory-list"></div>
+        </div>
+        <div class="memory-modal-actions">
+          <button id="clear-memory-btn" class="memory-clear-btn" type="button">Clear all</button>
         </div>
       </div>
     </div>
