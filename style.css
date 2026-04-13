@@ -330,6 +330,40 @@ body:not(.chat-started) #sidebar-toggle {
   text-wrap: balance;
 }
 
+.chat-home-actions {
+  width: min(100%, 760px);
+  margin: 24px auto 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chat-home-action-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  animation: fadeUp 0.34s ease both;
+}
+
+.chat-home-action-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(99, 102, 241, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-home-action-btn--primary {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.24);
+}
+
 .chat-home-prompts {
   width: min(100%, 760px);
   margin: 28px auto 0;
@@ -508,6 +542,21 @@ body.light-mode .chat-home-prompt {
   border-color: rgba(15, 23, 42, 0.08);
   background: #ffffff;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+body.light-mode .chat-home-action-btn {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+body.light-mode .chat-home-action-btn:hover {
+  border-color: rgba(99, 102, 241, 0.24);
+  background: #fbfbff;
+}
+
+body.light-mode .chat-home-action-btn--primary {
+  background: #f5f7ff;
 }
 
 body.light-mode .chat-home-prompt:hover {
@@ -1769,6 +1818,17 @@ body.light-mode .chat-home-subtitle {
     margin-top: 20px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .chat-home-actions {
+    margin-top: 18px;
+    gap: 8px;
+  }
+
+  .chat-home-action-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 14px;
   }
 
   .chat-home-prompt {
@@ -3371,7 +3431,6 @@ body.settings-open {
 
 .settings-stat-card,
 .settings-theme-btn,
-.settings-resume-btn,
 .settings-auth-btn {
   width: 100%;
   min-height: 84px;
@@ -3389,10 +3448,6 @@ body.settings-open {
 }
 
 .settings-theme-btn {
-  cursor: pointer;
-}
-
-.settings-resume-btn {
   cursor: pointer;
 }
 
@@ -3429,7 +3484,6 @@ body.settings-open {
 }
 
 .settings-theme-btn .material-symbols-outlined,
-.settings-resume-btn .material-symbols-outlined,
 .settings-stat-card .material-symbols-outlined,
 .settings-auth-btn .material-symbols-outlined {
   font-size: 22px;
@@ -3439,7 +3493,6 @@ body.settings-open {
 }
 
 .settings-theme-copy,
-.settings-resume-btn .settings-theme-copy,
 .settings-auth-btn .auth-copy {
   display: flex;
   flex-direction: column;
@@ -3448,7 +3501,6 @@ body.settings-open {
 
 .settings-stat-card strong,
 .settings-theme-copy strong,
-.settings-resume-btn .settings-theme-copy strong,
 .settings-auth-btn .auth-text {
   display: block;
   font-size: 14px;
@@ -3458,7 +3510,6 @@ body.settings-open {
 
 .settings-stat-card p,
 .settings-theme-copy small,
-.settings-resume-btn .settings-theme-copy small,
 .settings-auth-btn .auth-subtext {
   color: var(--text-secondary);
   font-size: 12px;
@@ -3627,7 +3678,6 @@ body.light-mode .memory-modal-card {
 
 body.light-mode .settings-stat-card,
 body.light-mode .settings-theme-btn,
-.settings-resume-btn,
 body.light-mode .settings-auth-btn {
   border-color: rgba(15, 23, 42, 0.08);
   background: rgba(15, 23, 42, 0.03);
@@ -3668,7 +3718,6 @@ body.light-mode .settings-theme-copy strong {
 
   .memory-modal-card .settings-overview-grid > #auth-btn.settings-auth-btn,
   .settings-auth-btn,
-  .settings-resume-btn,
   .settings-theme-btn,
   .settings-stat-card {
     min-height: 68px;
@@ -3699,7 +3748,6 @@ body.light-mode .settings-theme-copy strong {
   }
 
   .settings-auth-btn,
-  .settings-resume-btn,
   .settings-theme-btn,
   .settings-stat-card {
     gap: 10px;
@@ -3732,7 +3780,6 @@ body.app-view .memory-modal-card {
 
 body.app-view .memory-modal-card .settings-overview-grid > #auth-btn.settings-auth-btn,
 body.app-view .settings-auth-btn,
-body.app-view .settings-resume-btn,
 body.app-view .settings-theme-btn,
 body.app-view .settings-stat-card {
   min-height: 70px;
