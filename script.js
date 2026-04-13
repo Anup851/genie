@@ -34,6 +34,8 @@ const clearMemoryBtn = document.getElementById("clear-memory-btn");
 const settingsMemoryCount = document.getElementById("settings-memory-count");
 const settingsThemeBtn = document.getElementById("settings-theme-btn");
 const settingsThemeLabel = document.getElementById("settings-theme-label");
+const settingsResumeBtn = document.getElementById("settings-resume-btn");
+const settingsResumeLabel = document.getElementById("settings-resume-label");
 const documentContextBanner = document.getElementById("document-context-banner");
 const documentContextTitle = document.getElementById("document-context-title");
 const documentContextSubtitle = document.getElementById("document-context-subtitle");
@@ -50,6 +52,8 @@ let pendingDocumentContext = null;
 const MAX_VISIBLE_PROMPT_OPTIONS = 4;
 const MEMORY_STORAGE_KEY = "genie_user_memories_v1";
 const DOCUMENT_STORAGE_KEY = "genie_active_document_v1";
+const PROMPT_PREFERENCES_STORAGE_KEY = "genie_prompt_preferences_v1";
+const RESUME_LAST_CHAT_STORAGE_KEY = "genie_resume_last_chat_v1";
 const DOCUMENT_MAX_CHUNKS = 5;
 const DOCUMENT_CHUNK_SIZE = 1200;
 const DOCUMENT_CHUNK_OVERLAP = 180;
@@ -106,6 +110,82 @@ const PROMPT_GROUP_ICONS = {
   brainstorm: "emoji_objects",
   plan: "route",
 };
+
+function loadPromptPreferences() {
+  try {
+    const raw = localStorage.getItem(PROMPT_PREFERENCES_STORAGE_KEY);
+    const parsed = JSON.parse(raw || "{}");
+    return {
+      lastGroup:
+        typeof parsed?.lastGroup === "string" ? parsed.lastGroup.trim() : "",
+      usage:
+        parsed?.usage && typeof parsed.usage === "object" ? parsed.usage : {},
+    };
+  } catch {
+    return { lastGroup: "", usage: {} };
+  }
+}
+
+function savePromptPreferences(preferences) {
+  try {
+    localStorage.setItem(
+      PROMPT_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(preferences),
+    );
+  } catch {}
+}
+
+function recordPromptGroupUsage(groupName = "") {
+  const group = String(groupName || "").trim();
+  if (!group || !SUGGESTED_PROMPT_GROUPS[group]) return;
+
+  const preferences = loadPromptPreferences();
+  const usage = {
+    ...(preferences.usage || {}),
+    [group]: Number(preferences.usage?.[group] || 0) + 1,
+  };
+
+  savePromptPreferences({
+    lastGroup: group,
+    usage,
+  });
+}
+
+function getDefaultPromptGroup() {
+  const preferences = loadPromptPreferences();
+  const usage = preferences.usage || {};
+  const rankedGroups = Object.keys(SUGGESTED_PROMPT_GROUPS).sort((a, b) => {
+    return Number(usage[b] || 0) - Number(usage[a] || 0);
+  });
+
+  if (preferences.lastGroup && SUGGESTED_PROMPT_GROUPS[preferences.lastGroup]) {
+    return preferences.lastGroup;
+  }
+
+  if (rankedGroups.length && Number(usage[rankedGroups[0]] || 0) > 0) {
+    return rankedGroups[0];
+  }
+
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 12) return "summarize";
+  if (hour >= 12 && hour < 18) return "code";
+  if (hour >= 18 && hour < 22) return "brainstorm";
+  return "plan";
+}
+
+function getSuggestedPromptOptions(groupName = "") {
+  const group = String(groupName || "").trim();
+  const options = Array.isArray(SUGGESTED_PROMPT_GROUPS[group])
+    ? SUGGESTED_PROMPT_GROUPS[group]
+    : [];
+  if (!options.length) return [];
+
+  const preferences = loadPromptPreferences();
+  const usageWeight = Number(preferences.usage?.[group] || 0);
+  const rotation = usageWeight % options.length;
+  const rotated = options.slice(rotation).concat(options.slice(0, rotation));
+  return shuffleArray(rotated).slice(0, MAX_VISIBLE_PROMPT_OPTIONS);
+}
 
 function shuffleArray(items = []) {
   const list = [...items];
@@ -169,10 +249,15 @@ function shouldRenderTypingFrame(index, total, ch = "", chunkSize = 8) {
 
 function syncFreshChatLayout() {
   const hasMessages = !!chatbox?.querySelector(".chat");
-  const isFreshDraft = !activeChatId && !hasMessages;
+  const isFreshDraft = !hasMessages;
   document.body.classList.toggle("fresh-chat-home", isFreshDraft);
   if (chatContainer) {
     chatContainer.setAttribute("aria-hidden", String(!isFreshDraft));
+  }
+  if (isFreshDraft) {
+    renderPromptOptions(activePromptGroup || getDefaultPromptGroup());
+  } else {
+    renderPromptOptions("");
   }
 }
 
@@ -376,9 +461,24 @@ function renderMemoryList() {
   updateMemorySettingsSummary();
 }
 
+function shouldResumeLastChat() {
+  try {
+    return localStorage.getItem(RESUME_LAST_CHAT_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setResumeLastChatPreference(enabled) {
+  try {
+    localStorage.setItem(RESUME_LAST_CHAT_STORAGE_KEY, enabled ? "true" : "false");
+  } catch {}
+  updateMemorySettingsSummary();
+}
+
 function updateMemorySettingsSummary(memories = getMemories()) {
   if (sidebarMemorySummary) {
-    sidebarMemorySummary.textContent = "Theme and account";
+    sidebarMemorySummary.textContent = "Theme, resume, and account";
   }
   if (settingsThemeLabel) {
     settingsThemeLabel.textContent = document.body.classList.contains("light-mode")
@@ -397,6 +497,25 @@ function updateMemorySettingsSummary(memories = getMemories()) {
       document.body.classList.contains("light-mode")
         ? "Switch to dark mode"
         : "Switch to light mode",
+    );
+  }
+  if (settingsResumeLabel) {
+    settingsResumeLabel.textContent = shouldResumeLastChat()
+      ? "On on app start"
+      : "Off on app start";
+  }
+  const settingsResumeIcon = settingsResumeBtn?.querySelector(".material-symbols-outlined");
+  if (settingsResumeIcon) {
+    settingsResumeIcon.textContent = shouldResumeLastChat()
+      ? "history_toggle_off"
+      : "history";
+  }
+  if (settingsResumeBtn) {
+    settingsResumeBtn.setAttribute(
+      "aria-label",
+      shouldResumeLastChat()
+        ? "Disable resume last chat on app start"
+        : "Enable resume last chat on app start",
     );
   }
 }
@@ -421,6 +540,10 @@ function toggleThemePreference() {
     document.body.classList.contains("light-mode") ? "light" : "dark",
   );
   updateMemorySettingsSummary();
+}
+
+function toggleResumeLastChatPreference() {
+  setResumeLastChatPreference(!shouldResumeLastChat());
 }
 
 function normalizeTextForSearch(text) {
@@ -1522,11 +1645,19 @@ async function initializeApp() {
   // 5) Backend check
   testBackendConnection().catch(console.error);
 
-  // 6) Restore previous chat when one was open, otherwise keep the fresh draft view
-  await ensureActiveChat({
-    createIfMissing: false,
-    loadMessages: !!activeChatId,
-  });
+  // 6) Start fresh by default, or restore the last chat when the setting is enabled.
+  if (shouldResumeLastChat() && activeChatId) {
+    await ensureActiveChat({
+      createIfMissing: false,
+      loadMessages: true,
+      refreshSidebar: true,
+    });
+  } else {
+    persistActiveChatId(null);
+    resetChatDraftView();
+    await loadSessionsSidebar(true);
+    syncFreshChatLayout();
+  }
 
   console.log("App initialized");
 }
@@ -1582,6 +1713,11 @@ function initEventListeners() {
     if (settingsThemeBtn) {
         settingsThemeBtn.addEventListener("click", () => {
             toggleThemePreference();
+        });
+    }
+    if (settingsResumeBtn) {
+        settingsResumeBtn.addEventListener("click", () => {
+            toggleResumeLastChatPreference();
         });
     }
     if (memoryModal) {
@@ -3259,6 +3395,10 @@ function applySuggestedPrompt(promptText) {
     const prompt = String(promptText || "").trim();
     if (!prompt) return;
 
+    if (activePromptGroup) {
+        recordPromptGroupUsage(activePromptGroup);
+    }
+
     chatInput.value = prompt;
     chatInput.style.height = "44px";
     chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
@@ -3269,8 +3409,7 @@ function renderPromptOptions(groupName = "") {
     if (!chatHomeOptions) return;
 
     activePromptGroup = String(groupName || "").trim();
-    const options = shuffleArray(SUGGESTED_PROMPT_GROUPS[activePromptGroup] || [])
-      .slice(0, MAX_VISIBLE_PROMPT_OPTIONS);
+    const options = getSuggestedPromptOptions(activePromptGroup);
     document.body.classList.toggle("prompt-options-open", options.length > 0);
 
     document.querySelectorAll(".chat-home-prompt").forEach((button) => {
