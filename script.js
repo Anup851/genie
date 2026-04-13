@@ -804,6 +804,46 @@ function ensureSupabase() {
   return true;
 }
 
+function saveSessionState(session) {
+  if (session?.access_token) {
+    localStorage.setItem('genie_session_state', JSON.stringify({
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      user: session.user,
+      expiresAt: session.expires_at,
+    }));
+    console.log("Session saved for app reopen");
+  }
+}
+
+async function recoverPersistedSession() {
+  try {
+    const saved = localStorage.getItem('genie_session_state');
+    if (!saved) return null;
+    
+    console.log("Attempting to recover persisted session from localStorage...");
+    
+    if (supabaseClient && saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.refreshToken) {
+        const { data, error } = await supabaseClient.auth.refreshSession({
+          refresh_token: parsed.refreshToken,
+        });
+        
+        if (!error && data?.session) {
+          console.log("Session successfully refreshed from persisted token");
+          saveSessionState(data.session);
+          return data.session;
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.warn("Failed to recover persisted session:", error);
+    return null;
+  }
+}
+
 function hasOAuthCallbackParams() {
   const hash = String(window.location.hash || "");
   const search = String(window.location.search || "");
@@ -1175,9 +1215,18 @@ async function recoverAuthSession() {
 
   try {
     const session = await getSession();
-    if (session?.access_token) return session;
+    if (session?.access_token) {
+      saveSessionState(session);
+      return session;
+    }
   } catch (error) {
     console.warn("Initial session read failed:", error);
+  }
+
+  // Try to recover from persisted session first
+  const persistedSession = await recoverPersistedSession();
+  if (persistedSession?.access_token) {
+    return persistedSession;
   }
 
   const hasCallbackParams = hasOAuthCallbackParams();
@@ -1186,6 +1235,7 @@ async function recoverAuthSession() {
     200
   );
   if (hydratedSession?.access_token) {
+    saveSessionState(hydratedSession);
     return hydratedSession;
   }
 
@@ -1360,16 +1410,40 @@ function setComposerBusy(isBusy) {
   }
 }
 
+// Check if we're returning from OAuth callback - if so, go back to auth.html to show "already logged in" UI
+async function handleOAuthCallback() {
+  if (!hasOAuthCallbackParams()) return;
+  
+  console.log("📱 OAuth callback detected, recovering session...");
+  const session = await recoverAuthSession();
+  
+  if (session?.access_token) {
+    console.log("✅ OAuth session recovered, redirecting to auth page to show logged-in UI...");
+    // Clear URL params and redirect to auth.html
+    window.location.href = "./auth.html";
+  }
+}
+
 // ================= INITIALIZATION =================
 // âœ… SINGLE DOMContentLoaded handler
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("ðŸš€ Initializing app...");
 
   try {
+    // IMPORTANT: Check for OAuth callback FIRST
+    // If returning from Google login, redirect to auth.html to show "already logged in" UI
+    await handleOAuthCallback();
+    
     // Update auth button first
     await updateAuthButton();
     if (supabaseClient?.auth?.onAuthStateChange) {
-      supabaseClient.auth.onAuthStateChange(async () => {
+      supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        // Save session whenever auth state changes
+        if (session?.access_token) {
+          saveSessionState(session);
+        } else if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('genie_session_state');
+        }
         await updateAuthButton();
         await syncMicAuthState();
       });
