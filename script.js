@@ -2648,7 +2648,7 @@ async function generateResponse(
       if (stopGenerationRequested) {
         const currentText = String(messageElement.textContent || "").trim();
         const hasThinking =
-          !!messageElement.querySelector(".thinking-block") ||
+          !!messageElement.querySelector(".thinking-inline") ||
           /^thinking/i.test(currentText);
         const hasAnyRenderedContent = currentText.length > 0 && !hasThinking;
 
@@ -2949,17 +2949,10 @@ function showTypingIndicator() {
     
     typingLi.innerHTML = `
         <div class="bot-message-container">
-            <div class="typing-indicator">
-                <div class="typing-indicator__orb" aria-hidden="true">
-                    <span></span><span></span><span></span>
-                </div>
-                <div class="typing-indicator__copy">
-                    <strong class="typing-indicator__title">Genie is thinking</strong>
-                    <span class="typing-indicator__status">Preparing a helpful reply</span>
-                </div>
-                <div class="typing-indicator__trail" aria-hidden="true">
-                    <span></span><span></span><span></span>
-                </div>
+            <div class="typing-indicator" role="status" aria-live="polite">
+                <img class="thinking-inline__logo" src="genie-logo.png" alt="" aria-hidden="true" />
+                <span class="typing-indicator__title">Genie is thinking</span>
+                <span class="thinking-inline__dots" aria-hidden="true"><span></span><span></span><span></span></span>
             </div>
         </div>
     `;
@@ -2980,20 +2973,12 @@ function applyThinkingState(container, mode = "chat") {
 
     const render = () => {
         const title = escapeHtml(statuses[index % statuses.length] || "Thinking");
-        const detail = escapeHtml(statuses[(index + 1) % statuses.length] || "Preparing a reply");
         container.innerHTML = `
-            <div class="thinking-block" data-mode="${escapeHtml(mode)}">
-                <div class="thinking-block__header">
-                    <span class="thinking-block__pulse" aria-hidden="true"></span>
-                    <span class="thinking-block__label">${title}</span>
-                </div>
-                <div class="thinking-block__status">${detail}</div>
-                <div class="thinking-block__lines" aria-hidden="true">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </div>
+            <span class="thinking-inline" data-mode="${escapeHtml(mode)}" role="status" aria-live="polite">
+                <img class="thinking-inline__logo" src="genie-logo.png" alt="" aria-hidden="true" />
+                <span class="thinking-inline__text">${title}</span>
+                <span class="thinking-inline__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            </span>
         `;
     };
 

@@ -511,29 +511,121 @@ function appendIfPresent(lines, label, value) {
   lines.push(text);
 }
 
+function getNestedValue(source, path) {
+  return String(path || "")
+    .split(".")
+    .filter(Boolean)
+    .reduce((value, key) => (value == null ? undefined : value[key]), source);
+}
+
+function firstStringAtPaths(source, paths = []) {
+  for (const path of paths) {
+    const value = getNestedValue(source, path);
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function collectParseKitText(source, depth = 0, seen = new Set()) {
+  if (source == null || depth > 5) return [];
+  if (typeof source === "string") {
+    const text = source.trim();
+    return text ? [text] : [];
+  }
+  if (typeof source !== "object") return [];
+  if (seen.has(source)) return [];
+  seen.add(source);
+
+  const preferredKeys = [
+    "answer",
+    "analysis",
+    "summary",
+    "markdown",
+    "text",
+    "content",
+    "result",
+    "data",
+    "output",
+    "document",
+    "extraction",
+    "insights",
+    "keyDetails",
+    "key_details",
+    "redFlags",
+    "red_flags",
+    "questions",
+    "qa",
+  ];
+  const entries = Object.entries(source).sort(([a], [b]) => {
+    const ai = preferredKeys.indexOf(a);
+    const bi = preferredKeys.indexOf(b);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+
+  const chunks = [];
+  for (const [, value] of entries) {
+    chunks.push(...collectParseKitText(value, depth + 1, seen));
+  }
+  return chunks;
+}
+
 function formatParseKitAnalysisReply(data, userPrompt = "") {
   if (typeof data === "string") return data.trim();
 
-  const directText = [
-    data?.reply,
-    data?.answer,
-    data?.analysis,
-    data?.summary,
-    data?.content,
-    data?.text,
-    data?.markdown,
-  ].find((value) => typeof value === "string" && value.trim());
+  const directText = firstStringAtPaths(data, [
+    "reply",
+    "answer",
+    "analysis",
+    "summary",
+    "content",
+    "text",
+    "markdown",
+    "result.reply",
+    "result.answer",
+    "result.analysis",
+    "result.summary",
+    "result.content",
+    "result.text",
+    "result.markdown",
+    "data.reply",
+    "data.answer",
+    "data.analysis",
+    "data.summary",
+    "data.content",
+    "data.text",
+    "data.markdown",
+    "output.reply",
+    "output.answer",
+    "output.analysis",
+    "output.summary",
+    "output.content",
+    "output.text",
+    "output.markdown",
+    "document.text",
+    "document.markdown",
+  ]);
 
   const lines = [];
   if (directText) {
     lines.push(directText.trim());
   }
 
-  appendIfPresent(lines, "Key details", data?.key_details || data?.keyDetails);
-  appendIfPresent(lines, "Entities", data?.entities);
-  appendIfPresent(lines, "Red flags", data?.red_flags || data?.redFlags);
-  appendIfPresent(lines, "Questions and answers", data?.qa || data?.questions);
-  appendIfPresent(lines, "Extracted data", data?.result || data?.data);
+  const result = data?.result && typeof data.result === "object" ? data.result : {};
+  const body = data?.data && typeof data.data === "object" ? data.data : {};
+
+  appendIfPresent(lines, "Key details", data?.key_details || data?.keyDetails || result?.key_details || result?.keyDetails || body?.key_details || body?.keyDetails);
+  appendIfPresent(lines, "Entities", data?.entities || result?.entities || body?.entities);
+  appendIfPresent(lines, "Red flags", data?.red_flags || data?.redFlags || result?.red_flags || result?.redFlags || body?.red_flags || body?.redFlags);
+  appendIfPresent(lines, "Questions and answers", data?.qa || data?.questions || result?.qa || result?.questions || body?.qa || body?.questions);
+
+  if (!lines.length) {
+    const collected = Array.from(new Set(collectParseKitText(data)))
+      .filter((text) => text.length > 2 && !/^true|false|null$/i.test(text))
+      .slice(0, 8);
+    if (collected.length) {
+      lines.push(collected.join("\n\n"));
+    }
+  }
 
   if (!lines.length) {
     const json = JSON.stringify(data, null, 2);
