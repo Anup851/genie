@@ -2395,16 +2395,6 @@ body.light-mode .sidebar-settings-btn {
   line-height: 1.5;
 }
 
-.thinking-inline__logo {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  border-radius: 50%;
-  object-fit: cover;
-  filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.28));
-  animation: thinkingLogoBreathe 1.9s ease-in-out infinite;
-}
-
 .thinking-inline__text {
   color: var(--text-primary);
   font-weight: 500;
@@ -2462,11 +2452,6 @@ body.light-mode .thinking-inline__text {
   0% { box-shadow: 0 0 0 0 rgba(157, 193, 255, 0.45); }
   70% { box-shadow: 0 0 0 14px rgba(157, 193, 255, 0); }
   100% { box-shadow: 0 0 0 0 rgba(157, 193, 255, 0); }
-}
-
-@keyframes thinkingLogoBreathe {
-  0%, 100% { opacity: 0.78; transform: scale(0.96); }
-  50% { opacity: 1; transform: scale(1.04); }
 }
 
 @keyframes thinkingDotWave {

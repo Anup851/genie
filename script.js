@@ -2950,7 +2950,6 @@ function showTypingIndicator() {
     typingLi.innerHTML = `
         <div class="bot-message-container">
             <div class="typing-indicator" role="status" aria-live="polite">
-                <img class="thinking-inline__logo" src="genie-logo.png" alt="" aria-hidden="true" />
                 <span class="typing-indicator__title">Genie is thinking</span>
                 <span class="thinking-inline__dots" aria-hidden="true"><span></span><span></span><span></span></span>
             </div>
@@ -2975,7 +2974,6 @@ function applyThinkingState(container, mode = "chat") {
         const title = escapeHtml(statuses[index % statuses.length] || "Thinking");
         container.innerHTML = `
             <span class="thinking-inline" data-mode="${escapeHtml(mode)}" role="status" aria-live="polite">
-                <img class="thinking-inline__logo" src="genie-logo.png" alt="" aria-hidden="true" />
                 <span class="thinking-inline__text">${title}</span>
                 <span class="thinking-inline__dots" aria-hidden="true"><span></span><span></span><span></span></span>
             </span>
