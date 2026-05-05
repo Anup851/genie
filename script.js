@@ -291,10 +291,6 @@ const SUPPORTED_MEDIA_MIME_TYPES = new Set([
   "text/javascript",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ]);
 
 function isSupportedMediaFile(file) {
@@ -307,8 +303,7 @@ function isSupportedMediaFile(file) {
   // Fallback for browsers that omit MIME for some files
   const name = String(file.name || "").toLowerCase();
   return [
-    ".pdf", ".txt", ".md", ".json", ".csv", ".doc", ".docx",
-    ".xls", ".xlsx", ".ppt", ".pptx", ".rtf", ".xml",
+    ".pdf", ".doc", ".docx", ".txt", ".md", ".json", ".csv", ".rtf", ".xml",
     ".html", ".css", ".js", ".ts", ".py", ".java", ".c", ".cpp",
   ].some((ext) => name.endsWith(ext));
 }
