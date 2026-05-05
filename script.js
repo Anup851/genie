@@ -433,6 +433,9 @@ function loadMemories() {
     userMemories = [];
   }
   renderMemoryList();
+  loadMemoriesFromDatabase().catch((error) => {
+    console.warn("Failed to load database memory:", error);
+  });
 }
 
 function persistMemories() {
@@ -440,31 +443,93 @@ function persistMemories() {
   updateMemorySettingsSummary();
 }
 
+function normalizeMemory(memory) {
+  if (!memory?.key || !memory?.value) return null;
+  const key = String(memory.key).trim().toLowerCase();
+  const value = String(memory.value).trim();
+  if (!key || !value) return null;
+  return {
+    id: memory.id || `${key}:${value}`.toLowerCase(),
+    key,
+    label: String(memory.label || memory.category || key),
+    category: String(memory.category || memory.label || "profile"),
+    value,
+  };
+}
+
 function getMemories() {
   return Array.isArray(userMemories) ? userMemories : [];
 }
 
-function saveMemory(memory) {
-  if (!memory?.key || !memory?.value) return;
-  const key = String(memory.key).trim().toLowerCase();
-  const value = String(memory.value).trim();
-  if (!key || !value) return;
-
-  const next = {
-    id: memory.id || `${key}:${value}`.toLowerCase(),
-    key,
-    label: String(memory.label || key),
-    value,
-  };
-  const existingIndex = userMemories.findIndex((item) => item.key === key);
+function upsertMemoryLocal(memory) {
+  const next = normalizeMemory(memory);
+  if (!next) return null;
+  const existingIndex = userMemories.findIndex((item) => item.key === next.key);
   if (existingIndex >= 0) userMemories[existingIndex] = next;
   else userMemories.push(next);
   persistMemories();
+  return next;
+}
+
+async function saveMemoryToDatabase(memory) {
+  const normalized = normalizeMemory(memory);
+  if (!normalized) return;
+  const userId = await getUserId();
+  if (!userId) return;
+
+  const response = await apiFetch(`${BACKEND_URL}/memory/${userId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(normalized),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to save memory: ${response.status}`);
+  }
+}
+
+async function loadMemoriesFromDatabase() {
+  const userId = await getUserId();
+  if (!userId) return;
+
+  const response = await apiFetch(`${BACKEND_URL}/memory/${userId}`);
+  if (!response.ok) throw new Error(`Failed to load memory: ${response.status}`);
+
+  const data = await response.json();
+  const remote = Array.isArray(data.memories)
+    ? data.memories.map(normalizeMemory).filter(Boolean)
+    : [];
+  if (!remote.length) return;
+
+  const merged = new Map();
+  userMemories.forEach((memory) => {
+    const normalized = normalizeMemory(memory);
+    if (normalized) merged.set(normalized.key, normalized);
+  });
+  remote.forEach((memory) => merged.set(memory.key, memory));
+  userMemories = Array.from(merged.values());
+  persistMemories();
+}
+
+function saveMemory(memory) {
+  const next = upsertMemoryLocal(memory);
+  if (!next) return;
+  saveMemoryToDatabase(next).catch((error) => {
+    console.warn("Failed to save memory to database:", error);
+  });
 }
 
 function clearMemories() {
   userMemories = [];
   persistMemories();
+  getUserId()
+    .then((userId) => {
+      if (!userId) return null;
+      return apiFetch(`${BACKEND_URL}/memory/${userId}`, { method: "DELETE" });
+    })
+    .catch((error) => {
+      console.warn("Failed to clear database memory:", error);
+    });
 }
 
 function renderMemoryList() {
