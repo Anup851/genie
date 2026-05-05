@@ -75,5 +75,5 @@ npm start
 
 - The frontend uses CDN-delivered Prism.js and pdf.js.
 - Authentication is wired through Supabase in the client.
-- Media/PDF analysis requires `PARSEKIT_API_KEY` on the backend. The backend sends supported uploads to `https://api.parsekit.dev/upload`, then extracts them through `/extract`.
+- Media/PDF analysis requires `PARSEKIT_API_KEY` on the backend. The backend sends supported uploads to the ParseKit AI analysis endpoint at `https://api.parsekit.ai/api/v1/analyze`.
 - Some features depend on backend API routes and environment variables being configured correctly.
