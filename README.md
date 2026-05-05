@@ -7,7 +7,7 @@ Genie is a web-based AI chatbot with chat history, media upload support, image g
 - Real-time AI chat experience with animated assistant replies
 - Rich thinking/loading state for slower responses
 - Chat history with session persistence
-- Image upload and media analysis flow powered by ParseKit
+- Image upload and media analysis flow powered by Gemini
 - PDF and text document context support
 - Image generation mode from text prompts
 - Voice input support
@@ -75,5 +75,5 @@ npm start
 
 - The frontend uses CDN-delivered Prism.js and pdf.js.
 - Authentication is wired through Supabase in the client.
-- Media/PDF analysis requires `PARSEKIT_API_KEY` on the backend. The backend sends supported uploads to the ParseKit AI analysis endpoint at `https://api.parsekit.ai/api/v1/analyze`.
+- Media/PDF analysis requires `GEMINI_API_KEY` on the backend.
 - Some features depend on backend API routes and environment variables being configured correctly.
