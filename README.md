@@ -1,24 +1,78 @@
-# JavaScript Chatbot with google  API
+# Genie AI Chatbot
 
-
-
+Genie is a web-based AI chatbot with chat history, media upload support, image generation mode, memory features, and a responsive interface for desktop and mobile.
 
 ## Features
 
-- **HTML, CSS, and JavaScript Integration:** This project employs a combination of HTML, CSS, and JavaScript to create an engaging chatbot interface that seamlessly interacts with users.
+- Real-time AI chat experience with animated assistant replies
+- Rich thinking/loading state for slower responses
+- Chat history with session persistence
+- Image upload and media analysis flow
+- PDF and text document context support
+- Image generation mode from text prompts
+- Voice input support
+- Light and dark theme support
+- Responsive UI for mobile and desktop
+- Supabase-based authentication/session handling
 
-- **Responsive Design:** The chatbot interface is designed to adapt to different screen sizes, providing a consistent user experience across various devices.
+## Technologies Used
 
-- **Real-time Interaction:** The interactive chat interface allows users to send messages and receive immediate responses, resulting in dynamic and engaging conversations.
+- Frontend: HTML5, CSS3, Vanilla JavaScript
+- Backend: Node.js, Express
+- Authentication and session client: Supabase JavaScript SDK
+- AI orchestration/utilities: LangChain, custom prompt/chat services
+- Storage/data utilities: `@replit/database`, local JSON data files
+- File and environment handling: `dotenv`, `node-fetch`, `cors`
+- UI libraries/CDNs: Prism.js, Google Fonts, Material Symbols, Material Icons, pdf.js
 
-## Dependencies
+## Project Structure
 
-- Google Fonts & icons: The project employs Google Fonts for typography, enhancing the visual appeal of the chatbot interface.
+```text
+.
+|- index.html
+|- style.css
+|- script.js
+|- server.js
+|- services/
+|- utils/
+|- data/
+```
 
-## Contributing
+## Getting Started
 
-Contributions to this project are welcome! Whether you want to improve the user interface, enhance functionality, or fix issues, your input is valuable. If you encounter bugs or have ideas for new features, please open an issue in this repository.
+1. Install dependencies:
 
-Elevate your applications with a JavaScript Chatbot integrated with the google API. Engage in dynamic conversations using an intuitive interface built with HTML, CSS, and JavaScript. Feel free to explore, experiment, and integrate it into your own projects. For questions or suggestions, don't hesitate to reach out!
+```bash
+npm install
+```
 
-#made by - anup,sourabh,deepak and akhilesh.............
+2. Create a `.env` file and add the required API keys and config.
+
+3. Start the server:
+
+```bash
+npm start
+```
+
+4. Open `index.html` through your preferred local setup or run the app the way this project is currently served in your environment.
+
+## Main Dependencies
+
+```json
+{
+  "express": "^5.1.0",
+  "@supabase/supabase-js": "^2.93.3",
+  "langchain": "^0.3.0",
+  "@langchain/core": "^0.3.0",
+  "@replit/database": "^2.0.5",
+  "dotenv": "^17.2.1",
+  "cors": "^2.8.5",
+  "node-fetch": "^2.7.0"
+}
+```
+
+## Notes
+
+- The frontend uses CDN-delivered Prism.js and pdf.js.
+- Authentication is wired through Supabase in the client.
+- Some features depend on backend API routes and environment variables being configured correctly.

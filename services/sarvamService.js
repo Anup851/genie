@@ -1,13 +1,6 @@
 import fetch from "node-fetch";
 
-function isSarvamTurnOrderError(errorText = "") {
-  const text = String(errorText || "").toLowerCase();
-  return (
-    text.includes("first message must be from user") ||
-    (text.includes("starting with a user message") &&
-      text.includes("must alternate"))
-  );
-}
+const SARVAM_STARTER_MAX_TOKENS = 2048;
 
 function getMessageText(content) {
   if (typeof content === "string") return content.trim();
@@ -24,34 +17,41 @@ function getMessageText(content) {
   return "";
 }
 
+function isSarvamTurnOrderError(errorText = "") {
+  const text = String(errorText || "").toLowerCase();
+  return (
+    text.includes("first message must be from user") ||
+    (text.includes("starting with a user message") &&
+      text.includes("must alternate"))
+  );
+}
+
 function normalizeSarvamMessages(messages = [], opts = {}) {
   const includeSystem = opts.includeSystem !== false;
   const systemText = String(opts.systemText || "");
-  const result = [];
+  const normalized = [];
 
   if (includeSystem && systemText) {
-    result.push({ role: "system", content: systemText });
+    normalized.push({ role: "system", content: systemText });
   }
 
   const turns = [];
   for (const message of messages) {
-    const role = message?.role;
-    if (role !== "user" && role !== "assistant") continue;
-
+    if (message?.role !== "user" && message?.role !== "assistant") continue;
     const content = getMessageText(message.content);
     if (!content) continue;
 
     if (!turns.length) {
-      if (role !== "user") continue;
+      if (message.role !== "user") continue;
       turns.push({ role: "user", content });
       continue;
     }
 
     const previous = turns[turns.length - 1];
-    if (previous.role === role) {
+    if (previous.role === message.role) {
       previous.content = `${previous.content}\n\n${content}`;
     } else {
-      turns.push({ role, content });
+      turns.push({ role: message.role, content });
     }
   }
 
@@ -67,14 +67,27 @@ function normalizeSarvamMessages(messages = [], opts = {}) {
     turns[0].content = `[INSTRUCTION]\n${systemText}\n\n${turns[0].content}`;
   }
 
-  return result.concat(turns);
+  return normalized.concat(turns);
 }
 
 export function createSarvamService({
   apiKey,
-  model = "sarvam-m",
+  model = process.env.SARVAM_MODEL || "sarvam-m",
   endpoint = "https://api.sarvam.ai/v1/chat/completions",
 }) {
+  function resolveMaxTokens(requestedMaxTokens) {
+    const configuredCap = Number(
+      process.env.SARVAM_MAX_TOKENS || SARVAM_STARTER_MAX_TOKENS,
+    );
+    const safeCap =
+      Number.isFinite(configuredCap) && configuredCap > 0
+        ? Math.floor(configuredCap)
+        : SARVAM_STARTER_MAX_TOKENS;
+    const requested = Number(requestedMaxTokens);
+    if (!Number.isFinite(requested) || requested <= 0) return safeCap;
+    return Math.min(Math.floor(requested), safeCap);
+  }
+
   async function sendChatMessages({ messages, optimizedParams, signal }) {
     const systemText = messages
       .filter((message) => message?.role === "system")
@@ -82,52 +95,44 @@ export function createSarvamService({
       .join("\n\n")
       .trim();
 
-    const payload = {
-      model,
-      max_tokens: optimizedParams.maxTokens,
-      temperature: optimizedParams.temperature,
-    };
-
     const headers = {
       "Content-Type": "application/json",
       "api-subscription-key": apiKey,
     };
 
-    const strictMessages = normalizeSarvamMessages(messages, {
-      includeSystem: true,
-      systemText,
-    });
+    const payload = {
+      model,
+      max_tokens: resolveMaxTokens(optimizedParams.maxTokens),
+      temperature: optimizedParams.temperature,
+    };
 
     let response = await fetch(endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify({
         ...payload,
-        messages: strictMessages,
+        messages: normalizeSarvamMessages(messages, {
+          includeSystem: true,
+          systemText,
+        }),
       }),
       signal,
     });
 
     if (!response.ok) {
       let errorText = await response.text();
-      console.error(
-        "Sarvam error:",
-        response.status,
-        errorText.substring(0, 200),
-      );
+      console.error("Sarvam error:", response.status, errorText.substring(0, 200));
 
       if (response.status === 400 && isSarvamTurnOrderError(errorText)) {
-        const fallbackMessages = normalizeSarvamMessages(messages, {
-          includeSystem: false,
-          systemText,
-        });
-
         response = await fetch(endpoint, {
           method: "POST",
           headers,
           body: JSON.stringify({
             ...payload,
-            messages: fallbackMessages,
+            messages: normalizeSarvamMessages(messages, {
+              includeSystem: false,
+              systemText,
+            }),
           }),
           signal,
         });
@@ -150,7 +155,10 @@ export function createSarvamService({
     }
 
     const data = await response.json();
-    return data?.choices?.[0]?.message?.content || "No response.";
+    return {
+      reply: data?.choices?.[0]?.message?.content || "No response.",
+      usage: data?.usage || null,
+    };
   }
 
   return {

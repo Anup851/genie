@@ -4,6 +4,8 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { createChatService, fetchGdeltArticles } from "./services/chatService.js";
 import { createKeyValueStore } from "./services/dataStore.js";
@@ -14,6 +16,8 @@ import { cleanAssistantReply } from "./utils/messageFormatter.js";
 dotenv.config({ quiet: true });
 
 // --- Initialize ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const db = createKeyValueStore();
 const app = express();
 const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash")
@@ -27,6 +31,15 @@ const GEMINI_MEDIA_MODEL = String(
 const GEMINI_API_VERSION = String(
   process.env.GEMINI_API_VERSION || "v1beta",
 ).trim();
+const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
+const OPENROUTER_MEDIA_MODEL = String(
+  process.env.OPENROUTER_MEDIA_MODEL ||
+    "nvidia/nemotron-nano-12b-v2-vl:free",
+).trim();
+const OPENROUTER_MEDIA_TIMEOUT_MS = Math.max(
+  10000,
+  Number(process.env.OPENROUTER_MEDIA_TIMEOUT_MS || 60000),
+);
 const DEEPAI_API_BASE = "https://api.deepai.org/api";
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL =
@@ -38,10 +51,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-// --- Check API Key ---
-if (!process.env.SARVAM_API_KEY) {
-  console.error("âŒ SARVAM_API_KEY is missing in .env!");
-  process.exit(1);
+const hasSarvamApiKey = !!String(process.env.SARVAM_API_KEY || "").trim();
+if (!hasSarvamApiKey) {
+  console.warn(
+    "[BOOT] SARVAM_API_KEY is missing. Normal /chat will be unavailable, but media analysis can still run.",
+  );
 }
 
 // --- Simple Rate Limiting ---
@@ -69,6 +83,7 @@ function checkRateLimit(userId) {
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+app.use(express.static(__dirname));
 
 // --- CORS Headers ---
 app.use((req, res, next) => {
@@ -107,9 +122,18 @@ const historyService = createHistoryService({
   supabaseAnonKey: SUPABASE_ANON_KEY,
 });
 
-const sarvamService = createSarvamService({
-  apiKey: process.env.SARVAM_API_KEY,
-});
+const sarvamService = hasSarvamApiKey
+  ? createSarvamService({
+      apiKey: process.env.SARVAM_API_KEY,
+    })
+  : {
+      async sendChatMessages() {
+        const err = new Error("SARVAM_API_KEY is missing");
+        err.code = "SARVAM_NOT_CONFIGURED";
+        err.status = 503;
+        throw err;
+      },
+    };
 
 const chatService = createChatService({
   historyService,
@@ -159,6 +183,39 @@ function getISTString() {
   const get = (type) => parts.find((p) => p.type === type)?.value || "00";
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")} IST`;
 }
+
+async function ensureChatSessionForRoute(userId, chatId, authToken) {
+  if (!userId || !chatId || chatId === "default") return null;
+  return ensureSession(userId, chatId, authToken);
+}
+
+async function persistConversationTurn({
+  userId,
+  authToken,
+  chatId,
+  userMessage,
+  assistantReply,
+}) {
+  const activeChatId = chatId || "default";
+  await ensureChatSessionForRoute(userId, activeChatId, authToken);
+
+  await Promise.all([
+    saveMessage(userId, "user", userMessage, activeChatId, authToken),
+    saveMessage(userId, "assistant", assistantReply, activeChatId, authToken),
+  ]);
+
+  const history = await getChatHistory(userId, activeChatId, authToken);
+  const isFirstMessage = history.length <= 2;
+
+  if (isFirstMessage) {
+    await touchSession(userId, activeChatId, userMessage, authToken);
+  } else {
+    await touchSession(userId, activeChatId, null, authToken);
+  }
+
+  return { history, isFirstMessage };
+}
+
 function buildMediaSystemPrompt(mimeType = "") {
   const mime = String(mimeType || "").toLowerCase();
   const extractionMode =
@@ -265,6 +322,116 @@ async function callGeminiGenerateContent({
   throw err;
 }
 
+function extractOpenRouterText(data) {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (typeof part?.text === "string") return part.text;
+      if (typeof part?.content === "string") return part.content;
+      return "";
+    })
+    .join("")
+    .trim();
+}
+
+async function callOpenRouterChatCompletion({
+  systemInstruction = "",
+  messages = [],
+  temperature = 0.1,
+  maxTokens = 1200,
+  model = OPENROUTER_MEDIA_MODEL,
+  plugins,
+  signal,
+}) {
+  const apiKey = String(
+    process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "",
+  ).trim();
+  if (!apiKey) {
+    const err = new Error("Missing OpenRouter API key");
+    err.code = "MISSING_OPENROUTER_API_KEY";
+    throw err;
+  }
+
+  const payload = {
+    model,
+    messages: [],
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  if (systemInstruction) {
+    payload.messages.push({
+      role: "system",
+      content: systemInstruction,
+    });
+  }
+
+  payload.messages.push(...messages);
+
+  if (Array.isArray(plugins) && plugins.length) {
+    payload.plugins = plugins;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    OPENROUTER_MEDIA_TIMEOUT_MS,
+  );
+  const abortHandler = () => controller.abort();
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", abortHandler, { once: true });
+    }
+  }
+
+  let response;
+  try {
+    response = await fetch(`${OPENROUTER_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      const timeoutErr = new Error("OpenRouter media request timed out");
+      timeoutErr.code = "OPENROUTER_TIMEOUT";
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+    if (signal) {
+      signal.removeEventListener("abort", abortHandler);
+    }
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const err = new Error(
+      `OpenRouter API error: ${response.status} model=${model}`,
+    );
+    err.status = response.status;
+    err.body = errorText;
+    err.model = model;
+    throw err;
+  }
+
+  const data = await response.json();
+  return extractOpenRouterText(data) || "No response.";
+}
+
 async function callDeepAiTextToImage(prompt, signal) {
   const apiKey = String(process.env.DEEPAI_API_KEY || "").trim();
   if (!apiKey) {
@@ -334,8 +501,17 @@ async function supabaseAuthRequired(req, res, next) {
 // ============================================================
 
 app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/auth", (req, res) => {
+  res.sendFile(path.join(__dirname, "auth.html"));
+});
+
+app.get("/api/health", (req, res) => {
   res.json({
-    status: "âœ… Genie Backend (COMPLETE FIXED)",
+    status: "ok",
+    service: "genie-backend",
     timestamp: new Date().toISOString(),
     limits: {
       maxHistory: MAX_HISTORY_LENGTH,
@@ -421,11 +597,14 @@ async function analyzeMediaHandler(req, res) {
   const userPrompt = String(prompt || defaultPrompt).trim() || defaultPrompt;
 
   try {
-    const geminiKeyPreview = process.env.GEMINI_API_KEY
-      ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...${process.env.GEMINI_API_KEY.slice(-4)}`
+    const openRouterKey = String(
+      process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "",
+    ).trim();
+    const openRouterKeyPreview = openRouterKey
+      ? `${openRouterKey.slice(0, 10)}...${openRouterKey.slice(-4)}`
       : "MISSING";
     console.log(
-      `[KEY CHECK] route=/analyze-media provider=GEMINI key=${geminiKeyPreview} chatId=${activeChatId}`,
+      `[KEY CHECK] route=/analyze-media provider=OPENROUTER key=${openRouterKeyPreview} model=${OPENROUTER_MEDIA_MODEL} chatId=${activeChatId}`,
     );
 
     const dataUrlMatch = uploadData.match(
@@ -439,21 +618,34 @@ async function analyzeMediaHandler(req, res) {
     const base64Data = dataUrlMatch[2];
     const safeMediaName = String(mediaName || "uploaded-file").slice(0, 160);
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!openRouterKey) {
       return res.status(200).json({
         reply:
-          "Media analysis is not configured on backend. Add GEMINI_API_KEY in server secrets/env and try again.",
+          "Media analysis is not configured on backend. Add OPENROUTER_API_KEY in server secrets/env and try again.",
       });
     }
 
-    const userParts = [{ text: userPrompt }];
+    const userParts = [{ type: "text", text: userPrompt }];
+    const plugins = [];
+
     if (mimeType.startsWith("image/")) {
       userParts.push({
-        inlineData: { mimeType, data: base64Data },
+        type: "image_url",
+        image_url: {
+          url: uploadData,
+        },
       });
     } else if (mimeType === "application/pdf") {
       userParts.push({
-        inlineData: { mimeType, data: base64Data },
+        type: "file",
+        file: {
+          filename: safeMediaName,
+          file_data: uploadData,
+        },
+      });
+      plugins.push({
+        id: "file-parser",
+        pdf: { engine: "pdf-text" },
       });
     } else if (isTextLikeMime(mimeType)) {
       // For text-like uploads, inline text is more reliable than binary upload.
@@ -473,6 +665,7 @@ async function analyzeMediaHandler(req, res) {
 
       const clipped = decodedText.slice(0, 80000);
       userParts.push({
+        type: "text",
         text: `File: ${safeMediaName}\n\n${clipped}`,
       });
     } else {
@@ -482,35 +675,26 @@ async function analyzeMediaHandler(req, res) {
       });
     }
 
-    const mediaMaxTokens = Number(process.env.MEDIA_MAX_TOKENS || 4096);
+    const mediaMaxTokens = Number(process.env.MEDIA_MAX_TOKENS || 1200);
     const mediaTemperature = Number(process.env.MEDIA_TEMPERATURE || 0.1);
-    const rawReply = await callGeminiGenerateContent({
+    const rawReply = await callOpenRouterChatCompletion({
       systemInstruction: buildMediaSystemPrompt(mimeType),
-      contents: [{ role: "user", parts: userParts }],
+      messages: [{ role: "user", content: userParts }],
       temperature: mediaTemperature,
-      maxOutputTokens: mediaMaxTokens,
-      model: GEMINI_MEDIA_MODEL,
+      maxTokens: mediaMaxTokens,
+      model: OPENROUTER_MEDIA_MODEL,
+      plugins,
     });
 
     const reply = cleanAssistantReply(rawReply || "I could not analyze this file.");
 
-    await saveMessage(
+    await persistConversationTurn({
       userId,
-      "user",
-      `[Media: ${mimeType}] ${userPrompt}`,
-      activeChatId,
       authToken,
-    );
-    await saveMessage(userId, "assistant", reply, activeChatId, authToken);
-
-    const history = await getChatHistory(userId, activeChatId, authToken);
-    const isFirstMessage = history.length <= 2;
-
-    if (isFirstMessage) {
-      await touchSession(userId, activeChatId, userPrompt, authToken);
-    } else {
-      await touchSession(userId, activeChatId, null, authToken);
-    }
+      chatId: activeChatId,
+      userMessage: `[Media: ${mimeType}] ${userPrompt}`,
+      assistantReply: reply,
+    });
 
     return res.json({
       reply,
@@ -518,15 +702,24 @@ async function analyzeMediaHandler(req, res) {
     });
   } catch (err) {
     console.error("/analyze-media error:", err);
+    if (err?.code === "OPENROUTER_TIMEOUT" || err?.status === 504) {
+      return res.status(200).json({
+        reply:
+          "Media analysis timed out on OpenRouter. Try a smaller file, a shorter prompt, or set a faster model.",
+      });
+    }
     if (err?.status === 404) {
       return res.status(200).json({
         reply:
-          `Media analysis model not found: \`${err.model || GEMINI_MODEL}\` for API \`${err.version || GEMINI_API_VERSION}\`. ` +
-          "Set GEMINI_MODEL to a valid model (for example `gemini-2.5-flash`) and retry.",
+          `Media analysis model not found: \`${err.model || OPENROUTER_MEDIA_MODEL}\` on OpenRouter. ` +
+          "Set OPENROUTER_MEDIA_MODEL to a valid model and retry.",
       });
     }
     return res.status(500).json({
-      reply: "Sorry, an error occurred while analyzing the file.",
+      reply:
+        err?.body && String(err.body).trim()
+          ? `Media analysis failed: ${String(err.body).slice(0, 300)}`
+          : "Sorry, an error occurred while analyzing the file.",
     });
   }
 }
@@ -557,16 +750,13 @@ app.post("/generate-image", supabaseAuthRequired, async (req, res) => {
     const result = await callDeepAiTextToImage(userPrompt);
     const reply = `Generated image for: "${userPrompt}"\n${result.imageUrl}`;
 
-    await saveMessage(userId, "user", userPrompt, activeChatId, authToken);
-    await saveMessage(userId, "assistant", reply, activeChatId, authToken);
-
-    const history = await getChatHistory(userId, activeChatId, authToken);
-    const isFirstMessage = history.length <= 2;
-    if (isFirstMessage) {
-      await touchSession(userId, activeChatId, userPrompt, authToken);
-    } else {
-      await touchSession(userId, activeChatId, null, authToken);
-    }
+    await persistConversationTurn({
+      userId,
+      authToken,
+      chatId: activeChatId,
+      userMessage: userPrompt,
+      assistantReply: reply,
+    });
 
     return res.json({
       reply,
@@ -604,16 +794,13 @@ app.post("/chat/manual", supabaseAuthRequired, async (req, res) => {
   }
 
   try {
-    await saveMessage(userId, "user", String(message).trim(), activeChatId, authToken);
-    await saveMessage(userId, "assistant", String(reply).trim(), activeChatId, authToken);
-
-    const history = await getChatHistory(userId, activeChatId, authToken);
-    const isFirstMessage = history.length <= 2;
-    if (isFirstMessage) {
-      await touchSession(userId, activeChatId, String(message).trim(), authToken);
-    } else {
-      await touchSession(userId, activeChatId, null, authToken);
-    }
+    await persistConversationTurn({
+      userId,
+      authToken,
+      chatId: activeChatId,
+      userMessage: String(message).trim(),
+      assistantReply: String(reply).trim(),
+    });
 
     return res.json({ ok: true });
   } catch (err) {
@@ -653,8 +840,9 @@ app.post("/chat/rollback-last", supabaseAuthRequired, async (req, res) => {
 app.post("/chat", supabaseAuthRequired, async (req, res) => {
   const userId = req.auth?.sub;
   const authToken = req.auth?.token;
-  const { message, chatId, promptEnvelope } = req.body || {};
+  const { message, chatId, promptEnvelope, clientContextMeta } = req.body || {};
   const activeChatId = chatId || "default";
+  const forceCodeMode = !!clientContextMeta?.forceCodeMode;
   let clientDisconnected = false;
   req.on("close", () => {
     clientDisconnected = true;
@@ -699,6 +887,7 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
       chatId: activeChatId,
       message,
       promptEnvelope,
+      forceCodeMode,
       authToken,
       signal: controller.signal,
     });
@@ -717,7 +906,10 @@ app.post("/chat", supabaseAuthRequired, async (req, res) => {
   } catch (err) {
     console.error("âŒ /chat error:", err);
     let reply = "Sorry, an error occurred.";
-    if (err.name === "AbortError") {
+    if (err?.code === "SARVAM_NOT_CONFIGURED" || err?.status === 503) {
+      reply =
+        "Normal chat is not configured yet. Add SARVAM_API_KEY for /chat, or use media upload with OpenRouter.";
+    } else if (err.name === "AbortError") {
       reply = "Request timeout. Try a smaller request.";
     }
     res.status(500).json({ reply });

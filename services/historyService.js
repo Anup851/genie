@@ -30,6 +30,84 @@ function mapMessage(row) {
   };
 }
 
+function toTitleCase(text = "") {
+  return String(text || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function limitWords(text = "", maxWords = 5) {
+  return String(text || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, maxWords)
+    .join(" ");
+}
+
+function clipTitle(text = "", maxLength = 48) {
+  const value = String(text || "").trim();
+  if (value.length <= maxLength) return value;
+  const clipped = value.slice(0, maxLength);
+  return clipped.slice(0, clipped.lastIndexOf(" ")) || clipped;
+}
+
+function summarizeSessionTitle(input = "") {
+  const cleaned = String(input || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[#>*_\-\[\]\(\)]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return "New chat";
+
+  const lower = cleaned.toLowerCase();
+  const buildLike = [
+    /^write code for\s+/i,
+    /^write code to\s+/i,
+    /^build\s+/i,
+    /^create\s+/i,
+    /^make\s+/i,
+    /^generate\s+/i,
+  ];
+
+  const suffixRules = [
+    { pattern: /^summari[sz]e\s+(?:this\s+|the\s+|an?\s+|my\s+)?/i, suffix: "Summary" },
+    { pattern: /^explain\s+(?:this\s+|the\s+|an?\s+|my\s+)?/i, suffix: "Explanation" },
+    { pattern: /^brainstorm\s+(?:ideas?\s+for\s+|for\s+)?/i, suffix: "Ideas" },
+    { pattern: /^(?:make|create)\s+(?:a\s+)?plan\s+(?:for\s+|to\s+)?/i, suffix: "Plan" },
+  ];
+
+  for (const { pattern, suffix } of suffixRules) {
+    if (pattern.test(lower)) {
+      const core = cleaned
+        .replace(pattern, "")
+        .split(/\b(?:with|using|and|for|in)\b/i)[0]
+        .trim();
+      const title = `${toTitleCase(limitWords(core || "Chat", 4))} ${suffix}`.trim();
+      return clipTitle(title) || "New chat";
+    }
+  }
+
+  for (const pattern of buildLike) {
+    if (pattern.test(lower)) {
+      const core = cleaned
+        .replace(pattern, "")
+        .split(/\b(?:with|using|and|for|in|that)\b/i)[0]
+        .trim();
+      return clipTitle(toTitleCase(limitWords(core || "New chat", 5))) || "New chat";
+    }
+  }
+
+  const fallback = cleaned
+    .split(/[.!?\n]/)[0]
+    .trim();
+  return clipTitle(toTitleCase(limitWords(fallback, 6))) || "New chat";
+}
+
 export function createHistoryService({ config, supabaseUrl, supabaseAnonKey }) {
   const {
     maxSessions,
@@ -94,7 +172,21 @@ export function createHistoryService({ config, supabaseUrl, supabaseAnonKey }) {
       .select("id, title, created_at, updated_at")
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Parallel writes can race on first message; refetch instead of failing.
+      if (error.code === "23505" && chatId && isUuid(chatId)) {
+        const { data: existing, error: fetchError } = await client
+          .from("chat_sessions")
+          .select("id, title, created_at, updated_at")
+          .eq("id", chatId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (fetchError) throw fetchError;
+        if (existing) return mapSession(existing);
+      }
+      throw error;
+    }
     return mapSession(data);
   }
 
@@ -124,7 +216,7 @@ export function createHistoryService({ config, supabaseUrl, supabaseAnonKey }) {
     let session = await ensureSession(userId, chatId, authToken);
     if (!session) return null;
 
-    const nextTitle = String(titleIfEmpty || "").trim();
+    const nextTitle = summarizeSessionTitle(titleIfEmpty);
     const updates = {};
     if (nextTitle && (!session.title || session.title === "New chat")) {
       updates.title = nextTitle.slice(0, 120);
@@ -173,7 +265,6 @@ export function createHistoryService({ config, supabaseUrl, supabaseAnonKey }) {
     const sanitizedMessage = sanitizeInput(message, maxMessageLength);
     if (!sanitizedMessage || !chatId || chatId === "default") return [];
 
-    await ensureSession(userId, chatId, authToken);
     const client = getAuthedClient(authToken);
     const { data, error } = await client
       .from("chat_messages")
@@ -195,10 +286,43 @@ export function createHistoryService({ config, supabaseUrl, supabaseAnonKey }) {
       throw error;
     }
 
-    const history = await getChatHistory(userId, chatId, authToken);
-    if (history.length > maxHistoryLength) {
-      const rowsToDelete = history.slice(0, history.length - maxHistoryLength);
-      const ids = rowsToDelete.map((item) => item.id).filter(Boolean);
+    const { count, error: countError } = await client
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("session_id", chatId);
+
+    if (countError) {
+      logDbError("saveMessage.countHistory", countError, {
+        userId,
+        chatId,
+      });
+      throw countError;
+    }
+
+    const overflowCount = Math.max(0, Number(count || 0) - maxHistoryLength);
+    if (overflowCount > 0) {
+      const { data: overflowRows, error: overflowError } = await client
+        .from("chat_messages")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("session_id", chatId)
+        .order("created_at", { ascending: true })
+        .limit(overflowCount);
+
+      if (overflowError) {
+        logDbError("saveMessage.fetchOverflow", overflowError, {
+          userId,
+          chatId,
+          overflowCount,
+        });
+        throw overflowError;
+      }
+
+      const ids = Array.isArray(overflowRows)
+        ? overflowRows.map((item) => item.id).filter(Boolean)
+        : [];
+
       if (ids.length) {
         const { error: deleteError } = await client
           .from("chat_messages")
@@ -218,7 +342,6 @@ export function createHistoryService({ config, supabaseUrl, supabaseAnonKey }) {
     }
 
     return [
-      ...history.filter((item) => item.id !== data.id),
       {
         ...mapMessage(data),
         id: data.id,

@@ -271,6 +271,7 @@ export function createChatService({
     chatId = "default",
     message,
     promptEnvelope,
+    forceCodeMode = false,
     authToken,
     signal,
   }) {
@@ -280,7 +281,9 @@ export function createChatService({
         ? promptEnvelope.trim().slice(0, 40000)
         : sanitizedMessage;
 
-    const optimizedParams = buildChatParams(sanitizedMessage, maxResponseTokens);
+    const optimizedParams = buildChatParams(sanitizedMessage, maxResponseTokens, {
+      forceCodeMode,
+    });
     const nowIST = getISTString();
     const newsContext = await getLiveNewsContext(sanitizedMessage);
 
@@ -320,8 +323,14 @@ export function createChatService({
 
     const reply = cleanAssistantReply(rawReply);
 
-    await saveMessage(userId, "user", sanitizedMessage, chatId, authToken);
-    await saveMessage(userId, "assistant", reply, chatId, authToken);
+    if (chatId && chatId !== "default") {
+      await historyService.ensureSession(userId, chatId, authToken);
+    }
+
+    await Promise.all([
+      saveMessage(userId, "user", sanitizedMessage, chatId, authToken),
+      saveMessage(userId, "assistant", reply, chatId, authToken),
+    ]);
 
     if (isFirstMessage) {
       await touchSession(userId, chatId, sanitizedMessage, authToken);

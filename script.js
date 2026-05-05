@@ -60,6 +60,11 @@ const DOCUMENT_CHUNK_OVERLAP = 180;
 let userMemories = [];
 let activeDocumentContext = null;
 let activePromptGroup = "";
+const THINKING_STATUS_BY_MODE = {
+  chat: ["Thinking", "Reading your prompt", "Planning the reply", "Writing the answer"],
+  media: ["Thinking", "Reviewing your file", "Pulling out key details", "Preparing the answer"],
+  image: ["Thinking", "Designing the concept", "Rendering the image", "Finishing touches"],
+};
 
 const SUGGESTED_PROMPT_GROUPS = {
   summarize: [
@@ -2472,7 +2477,7 @@ async function generateResponse(
   requestMode = "chat",
 ) {
   const messageElement = convertTypingToMessage(incomingChatli);
-  messageElement.innerHTML = "Thinking<span class='dots'></span>";
+  let stopThinkingState = applyThinkingState(messageElement, requestMode);
   const hasMediaUpload = requestMode === "media";
   const isImageGeneration = requestMode === "image";
   let responseRenderingStarted = false;
@@ -2611,6 +2616,9 @@ async function generateResponse(
     responseText = normalizeInlineCodeArtifacts(responseText);
     throwIfGenerationStopped();
     responseRenderingStarted = true;
+    stopThinkingState();
+    stopThinkingState = () => {};
+    messageElement.innerHTML = "";
 
     if (isImageGeneration && generatedImageUrl) {
       messageElement.innerHTML = createGeneratedImageReplyHtml({
@@ -2644,7 +2652,9 @@ async function generateResponse(
     if (error?.name === "AbortError") {
       if (stopGenerationRequested) {
         const currentText = String(messageElement.textContent || "").trim();
-        const hasThinking = !!messageElement.querySelector(".dots") || /^thinking/i.test(currentText);
+        const hasThinking =
+          !!messageElement.querySelector(".thinking-block") ||
+          /^thinking/i.test(currentText);
         const hasAnyRenderedContent = currentText.length > 0 && !hasThinking;
 
         // If stopped before response started, keep message empty.
@@ -2685,6 +2695,7 @@ async function generateResponse(
       }
     }
   } finally {
+    stopThinkingState();
     if (timeout) clearTimeout(timeout);
     chatbox.scrollTo(0, chatbox.scrollHeight);
     setComposerBusy(false);
@@ -2807,11 +2818,11 @@ function renderAssistantMessage(contentElement, messageText) {
 
 function getAdaptiveTypingSpeeds(fullText = "") {
     const length = String(fullText || "").length;
-    if (length > 3200) return { textSpeed: 1, codeSpeed: 0 };
-    if (length > 1800) return { textSpeed: 2, codeSpeed: 1 };
-    if (length > 900) return { textSpeed: 4, codeSpeed: 2 };
-    if (length > 300) return { textSpeed: 6, codeSpeed: 3 };
-    return { textSpeed: 9, codeSpeed: 4 };
+    if (length > 3200) return { textSpeed: 0, codeSpeed: 0 };
+    if (length > 1800) return { textSpeed: 1, codeSpeed: 0 };
+    if (length > 900) return { textSpeed: 2, codeSpeed: 1 };
+    if (length > 300) return { textSpeed: 4, codeSpeed: 2 };
+    return { textSpeed: 6, codeSpeed: 3 };
 }
 
 async function renderAssistantMessageAnimated(contentElement, messageText) {
@@ -2944,7 +2955,16 @@ function showTypingIndicator() {
     typingLi.innerHTML = `
         <div class="bot-message-container">
             <div class="typing-indicator">
-                <span></span><span></span><span></span>
+                <div class="typing-indicator__orb" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                </div>
+                <div class="typing-indicator__copy">
+                    <strong class="typing-indicator__title">Genie is thinking</strong>
+                    <span class="typing-indicator__status">Preparing a helpful reply</span>
+                </div>
+                <div class="typing-indicator__trail" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                </div>
             </div>
         </div>
     `;
@@ -2952,6 +2972,43 @@ function showTypingIndicator() {
     chatbox.appendChild(typingLi);
     chatbox.scrollTo(0, chatbox.scrollHeight);
     return typingLi;
+}
+
+function getThinkingStatuses(mode = "chat") {
+    return THINKING_STATUS_BY_MODE[mode] || THINKING_STATUS_BY_MODE.chat;
+}
+
+function applyThinkingState(container, mode = "chat") {
+    if (!container) return () => {};
+    const statuses = getThinkingStatuses(mode);
+    let index = 0;
+
+    const render = () => {
+        const title = escapeHtml(statuses[index % statuses.length] || "Thinking");
+        const detail = escapeHtml(statuses[(index + 1) % statuses.length] || "Preparing a reply");
+        container.innerHTML = `
+            <div class="thinking-block" data-mode="${escapeHtml(mode)}">
+                <div class="thinking-block__header">
+                    <span class="thinking-block__pulse" aria-hidden="true"></span>
+                    <span class="thinking-block__label">${title}</span>
+                </div>
+                <div class="thinking-block__status">${detail}</div>
+                <div class="thinking-block__lines" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        `;
+    };
+
+    render();
+    const intervalId = window.setInterval(() => {
+        index += 1;
+        render();
+    }, 1700);
+
+    return () => window.clearInterval(intervalId);
 }
 
 function convertTypingToMessage(incomingChatli) {
