@@ -298,6 +298,14 @@ function extractGeminiText(data) {
     .trim();
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTemporaryGeminiError(status) {
+  return [429, 500, 502, 503, 504].includes(Number(status));
+}
+
 async function callGeminiGenerateContent({
   systemInstruction = "",
   contents = [],
@@ -319,36 +327,50 @@ async function callGeminiGenerateContent({
 
   for (const version of versions) {
     const endpoint = `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(normalizedModel)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents,
-        generationConfig: {
-          temperature,
-          maxOutputTokens,
-        },
-      }),
-      signal,
-    });
+    const maxAttempts = 3;
 
-    if (response.ok) {
-      const data = await response.json();
-      const text = extractGeminiText(data);
-      return text || "No response.";
-    }
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents,
+          generationConfig: {
+            temperature,
+            maxOutputTokens,
+          },
+        }),
+        signal,
+      });
 
-    const errorText = await response.text();
-    lastError = {
-      status: response.status,
-      body: errorText,
-      version,
-      model: normalizedModel,
-    };
-    if (response.status !== 404) {
+      if (response.ok) {
+        const data = await response.json();
+        const text = extractGeminiText(data);
+        return text || "No response.";
+      }
+
+      const errorText = await response.text();
+      lastError = {
+        status: response.status,
+        body: errorText,
+        version,
+        model: normalizedModel,
+      };
+
+      if (response.status === 404) break;
+      if (
+        attempt < maxAttempts &&
+        isTemporaryGeminiError(response.status)
+      ) {
+        await delay(350 * attempt);
+        continue;
+      }
+
       break;
     }
+
+    if (lastError?.status !== 404) break;
   }
 
   const err = new Error(
@@ -817,6 +839,12 @@ async function analyzeMediaHandler(req, res) {
       return res.status(200).json({
         reply:
           "Media analysis timed out on Gemini. Try a smaller file or a shorter prompt.",
+      });
+    }
+    if (isTemporaryGeminiError(err?.status)) {
+      return res.status(200).json({
+        reply:
+          "Gemini media analysis is temporarily busy. Please retry in a moment.",
       });
     }
     if (err?.code === "MISSING_GEMINI_API_KEY") {
